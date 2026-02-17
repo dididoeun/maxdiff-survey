@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Inter } from "next/font/google";
-
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
+import { GNB } from "@/components/gnb";
 
 export const metadata: Metadata = {
   title: "MaxDiff 설문조사",
@@ -15,8 +13,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko" className={inter.variable}>
-      <body className="bg-background min-h-screen">{children}</body>
+    <html lang="ko">
+      <body className="bg-background min-h-screen">
+        <GNB />
+        {children}
+      </body>
     </html>
   );
 }

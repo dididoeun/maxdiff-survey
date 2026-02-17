@@ -99,36 +99,31 @@ export default function AdminPage() {
   if (createdId) {
     return (
       <div className="max-w-xl mx-auto px-4 py-12 text-center">
-        <Card>
-          <CardHeader>
-            <div className="text-5xl mb-2">✅</div>
-            <CardTitle className="text-2xl">설문이 생성되었습니다!</CardTitle>
-            <CardDescription>아래 URL을 응답자에게 공유하세요.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center gap-2">
-              <Input readOnly value={surveyUrl} />
-              <Button variant="outline" onClick={copyUrl} className="whitespace-nowrap">
-                {copied ? "복사됨!" : "URL 복사"}
-              </Button>
-            </div>
+        <img src="/success.svg" alt="" className="mx-auto mb-4" />
+        <h2 className="text-2xl font-semibold text-foreground">설문을 만들었어요!</h2>
+        <p className="text-muted-foreground mt-1 mb-6">아래 URL을 응답자에게 공유하세요.</p>
 
-            <div className="flex gap-3 justify-center">
-              <Button
-                variant="outline"
-                onClick={() => router.push(`/survey/${createdId}`)}
-              >
-                설문 미리보기
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => router.push(`/dashboard/${createdId}`)}
-              >
-                대시보드 보기
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex items-center gap-2 mb-6">
+          <Input readOnly value={surveyUrl} className="h-10 px-3.5" />
+          <Button variant="outline" onClick={copyUrl} className="whitespace-nowrap h-10 px-3.5">
+            {copied ? "복사됨!" : "URL 복사"}
+          </Button>
+        </div>
+
+        <div className="flex gap-2 justify-center">
+          <Button
+            variant="secondary"
+            onClick={() => router.push(`/survey/${createdId}`)}
+          >
+            설문 미리보기
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => router.push(`/dashboard/${createdId}`)}
+          >
+            대시보드 보기
+          </Button>
+        </div>
       </div>
     );
   }
@@ -169,45 +164,36 @@ export default function AdminPage() {
       {/* 직군 항목 */}
       <div className="mb-6">
         <Label>응답자 직군 항목</Label>
-        <div className="flex gap-2 mt-2 mb-2">
+        <form className="flex gap-2 mt-2 mb-2" onSubmit={(e) => {
+          e.preventDefault();
+          if (!newRole.trim()) return;
+          if (!jobRoles.includes(newRole.trim())) {
+            setJobRoles([...jobRoles, newRole.trim()]);
+          }
+          setNewRole("");
+        }}>
           <Input
             type="text"
             value={newRole}
             onChange={(e) => setNewRole(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                if (!newRole.trim()) return;
-                if (!jobRoles.includes(newRole.trim())) {
-                  setJobRoles([...jobRoles, newRole.trim()]);
-                }
-                setNewRole("");
-              }
-            }}
             placeholder="직군 이름 (예: 디자이너)"
             className="h-10 px-3.5"
           />
           <Button
+            type="submit"
             variant="outline"
             className="h-10 px-3.5"
-            onClick={() => {
-              if (!newRole.trim()) return;
-              if (!jobRoles.includes(newRole.trim())) {
-                setJobRoles([...jobRoles, newRole.trim()]);
-              }
-              setNewRole("");
-            }}
           >
             추가
           </Button>
-        </div>
+        </form>
         {jobRoles.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {jobRoles.map((role) => (
               <Badge
                 key={role}
                 variant="secondary"
-                className="gap-1"
+                className="gap-1 h-6"
               >
                 {role}
                 <button
@@ -230,19 +216,18 @@ export default function AdminPage() {
       {/* 항목 추가 */}
       <div className="mb-6">
         <Label>평가 항목 추가</Label>
-        <div className="flex gap-2 mt-2">
+        <form className="flex gap-2 mt-2" onSubmit={(e) => { e.preventDefault(); addItem(); }}>
           <Input
             type="text"
             value={newItemName}
             onChange={(e) => setNewItemName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addItem()}
             placeholder="항목 이름 (예: Button)"
             className="h-10 px-3.5"
           />
-          <Button variant="outline" className="h-10 px-3.5" onClick={addItem}>
+          <Button type="submit" variant="outline" className="h-10 px-3.5">
             추가
           </Button>
-        </div>
+        </form>
       </div>
 
       {/* 항목 목록 */}
@@ -252,8 +237,8 @@ export default function AdminPage() {
             항목 목록 ({items.length}개)
           </p>
           {items.map((item) => (
-            <Card key={item.id}>
-              <CardContent className="flex items-center gap-4 p-4">
+            <Card key={item.id} className="h-24">
+              <CardContent className="flex items-center gap-4 p-4 h-full">
                 {/* 이미지 미리보기 / 업로드 */}
                 <div className="w-16 h-16 flex-shrink-0 bg-muted rounded-lg overflow-hidden flex items-center justify-center">
                   {item.image ? (
@@ -273,7 +258,7 @@ export default function AdminPage() {
                           if (file) handleImageUpload(item.id, file);
                         }}
                       />
-                      {uploading ? "..." : "이미지\n추가"}
+                      {uploading ? "..." : <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>}
                     </label>
                   )}
                 </div>
@@ -301,7 +286,7 @@ export default function AdminPage() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-destructive text-xl"
                   onClick={() => removeItem(item.id)}
                 >
                   ×
