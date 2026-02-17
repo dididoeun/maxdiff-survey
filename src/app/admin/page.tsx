@@ -148,7 +148,7 @@ export default function AdminPage() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="예: WDS 컴포넌트 개선 시급도 조사"
-          className="mt-1"
+          className="mt-2 h-10 px-3.5"
         />
       </div>
 
@@ -162,14 +162,14 @@ export default function AdminPage() {
           max={8}
           value={setSize}
           onChange={(e) => setSetSize(Number(e.target.value))}
-          className="w-24 mt-1"
+          className="w-24 mt-2 h-10 px-3.5"
         />
       </div>
 
       {/* 직군 항목 */}
       <div className="mb-6">
         <Label>응답자 직군 항목</Label>
-        <div className="flex gap-2 mt-1 mb-2">
+        <div className="flex gap-2 mt-2 mb-2">
           <Input
             type="text"
             value={newRole}
@@ -185,9 +185,11 @@ export default function AdminPage() {
               }
             }}
             placeholder="직군 이름 (예: 디자이너)"
+            className="h-10 px-3.5"
           />
           <Button
             variant="outline"
+            className="h-10 px-3.5"
             onClick={() => {
               if (!newRole.trim()) return;
               if (!jobRoles.includes(newRole.trim())) {
@@ -228,15 +230,16 @@ export default function AdminPage() {
       {/* 항목 추가 */}
       <div className="mb-6">
         <Label>평가 항목 추가</Label>
-        <div className="flex gap-2 mt-1">
+        <div className="flex gap-2 mt-2">
           <Input
             type="text"
             value={newItemName}
             onChange={(e) => setNewItemName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addItem()}
             placeholder="항목 이름 (예: Button)"
+            className="h-10 px-3.5"
           />
-          <Button variant="outline" onClick={addItem}>
+          <Button variant="outline" className="h-10 px-3.5" onClick={addItem}>
             추가
           </Button>
         </div>
@@ -313,7 +316,7 @@ export default function AdminPage() {
       <Button
         onClick={createSurvey}
         disabled={creating}
-        className="w-full"
+        className="w-full h-10"
         size="lg"
       >
         {creating ? "생성 중..." : "설문 생성하기"}

@@ -144,8 +144,8 @@ export default function SurveyPage() {
   if (completed) {
     return (
       <div className="max-w-lg mx-auto px-4 py-12 text-center">
-        <Card>
-          <CardHeader>
+        <Card className="py-6">
+          <CardHeader className="px-6">
             <div className="text-5xl mb-2">🎉</div>
             <CardTitle className="text-2xl">설문이 완료되었습니다!</CardTitle>
             <CardDescription>참여해 주셔서 감사합니다.</CardDescription>
@@ -159,20 +159,20 @@ export default function SurveyPage() {
   if (!started && survey.jobRoles.length > 0) {
     return (
       <div className="max-w-lg mx-auto px-4 py-12">
-        <Card>
-          <CardHeader>
+        <Card className="py-6">
+          <CardHeader className="px-6">
             <CardTitle className="text-2xl">{survey.title}</CardTitle>
             <CardDescription>
               설문을 시작하기 전에 직군을 선택해주세요.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-6">
             <div className="space-y-2">
               {survey.jobRoles.map((role) => (
                 <Button
                   key={role}
                   variant="outline"
-                  className={`w-full justify-start font-medium ${
+                  className={`w-full justify-start font-medium h-10 px-3.5 ${
                     jobRole === role
                       ? "border-primary bg-accent"
                       : ""
@@ -187,7 +187,7 @@ export default function SurveyPage() {
             <Button
               onClick={() => setStarted(true)}
               disabled={!jobRole}
-              className="w-full"
+              className="w-full h-10 px-3.5"
               size="lg"
             >
               설문 시작하기
@@ -215,12 +215,12 @@ export default function SurveyPage() {
         </div>
       </div>
 
-      <Card className="mb-6">
-        <CardContent className="p-6">
+      <Card className="mb-6 py-6">
+        <CardContent className="px-6">
           <p className="text-center text-muted-foreground mb-4 text-sm">
-            <span className="text-green-600 font-semibold">가장 시급한 것</span>{" "}
+            <span className="text-red-600 font-semibold">가장 시급한 것</span>{" "}
             1개와{" "}
-            <span className="text-red-600 font-semibold">
+            <span className="text-green-600 font-semibold">
               가장 덜 시급한 것
             </span>{" "}
             1개를 선택하세요.
@@ -234,13 +234,7 @@ export default function SurveyPage() {
               return (
                 <div
                   key={item.name}
-                  className={`border-2 rounded-xl p-4 transition ${
-                    isBest
-                      ? "border-green-600 bg-green-50"
-                      : isWorst
-                      ? "border-destructive bg-red-50"
-                      : "border-border bg-card"
-                  }`}
+                  className="border rounded-xl p-4 transition border-border bg-card"
                 >
                   {item.image && (
                     <img
@@ -256,7 +250,11 @@ export default function SurveyPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-1"
+                      className={`flex-1 h-10 px-3.5 ${
+                        isBest
+                          ? "border-red-500 bg-red-50 text-red-600 hover:bg-red-100"
+                          : ""
+                      }`}
                       onClick={() => handleSelect(item.name, "best")}
                     >
                       🔺 가장 시급
@@ -264,7 +262,11 @@ export default function SurveyPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="flex-1"
+                      className={`flex-1 h-10 px-3.5 ${
+                        isWorst
+                          ? "border-green-500 bg-green-50 text-green-600 hover:bg-green-100"
+                          : ""
+                      }`}
                       onClick={() => handleSelect(item.name, "worst")}
                     >
                       🔻 가장 덜 시급
@@ -280,7 +282,7 @@ export default function SurveyPage() {
       <Button
         onClick={submitRound}
         disabled={!best || !worst || submitting}
-        className="w-full"
+        className="w-full h-10 px-3.5"
         size="lg"
       >
         {submitting

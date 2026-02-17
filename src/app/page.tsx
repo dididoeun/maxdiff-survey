@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 interface Survey {
   id: string;
@@ -27,15 +27,15 @@ export default function Home() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-3xl font-bold text-foreground mb-2">
-        MaxDiff 설문조사
+        자급자족 컴포넌트 개선 시급도 조사툴
       </h1>
-      <p className="text-muted-foreground mb-8">
-        설문을 생성하고, 응답을 수집하고, 결과를 분석하세요.
+      <p className="text-muted-foreground">
+        MaxDiff 조사를 만들고 결과를 분석할 수 있어요.
       </p>
 
-      <Button asChild size="lg" className="mb-10">
-        <Link href="/admin">+ 새 설문 만들기</Link>
-      </Button>
+      <Link href="/admin" className={cn(buttonVariants({ size: "lg" }), "mt-6 mb-10 h-10 px-3.5")}>
+        + 새 설문 만들기
+      </Link>
 
       {surveys.length > 0 && (
         <div>
@@ -46,21 +46,21 @@ export default function Home() {
             {surveys.map((s) => {
               const itemCount = JSON.parse(s.items).length;
               return (
-                <Card key={s.id}>
-                  <CardContent className="flex items-center justify-between p-4">
+                <Card key={s.id} className="h-20">
+                  <CardContent className="flex items-center justify-between h-full px-6 py-0">
                     <div>
-                      <p className="font-medium text-foreground">{s.title}</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="font-medium text-foreground text-sm">{s.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         항목 {itemCount}개 · {s.createdAt}
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/survey/${s.id}`}>설문</Link>
-                      </Button>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/dashboard/${s.id}`}>대시보드</Link>
-                      </Button>
+                      <Link href={`/survey/${s.id}`} className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "h-8")}>
+                        설문
+                      </Link>
+                      <Link href={`/dashboard/${s.id}`} className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "h-8")}>
+                        대시보드
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>

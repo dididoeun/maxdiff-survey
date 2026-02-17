@@ -238,9 +238,9 @@ export default function DashboardPage() {
           <Input
             readOnly
             value={surveyUrl}
-            className="max-w-md"
+            className="max-w-md h-10 px-3.5"
           />
-          <Button variant="outline" onClick={copyUrl} size="sm">
+          <Button variant="outline" onClick={copyUrl} size="sm" className="h-10 px-3.5 rounded-[0.625rem]">
             {copied ? "복사됨!" : "URL 복사"}
           </Button>
         </div>
@@ -256,11 +256,11 @@ export default function DashboardPage() {
 
         {/* 막대 차트 */}
         <TabsContent value="chart">
-          <Card>
-            <CardHeader>
+          <Card className="py-6">
+            <CardHeader className="px-6">
               <CardTitle>MaxDiff 점수 (0~100)</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-6">
               {scores.length > 0 ? (
                 <ResponsiveContainer width="100%" height={Math.max(300, scores.length * 45)}>
                   <BarChart
@@ -297,13 +297,14 @@ export default function DashboardPage() {
 
         {/* 상세 테이블 */}
         <TabsContent value="table">
-          <Card>
-            <CardHeader className="flex-row items-center justify-between space-y-0">
+          <Card className="py-6">
+            <CardHeader className="flex-row items-center justify-between space-y-0 px-6 gap-3">
               <CardTitle>항목별 상세 데이터</CardTitle>
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={downloadCSV}
                 size="sm"
+                className="h-8 px-3.5 !gap-0"
               >
                 CSV 다운로드
               </Button>
@@ -356,8 +357,8 @@ export default function DashboardPage() {
 
         {/* Matrix 분석 */}
         <TabsContent value="matrix">
-          <Card>
-            <CardHeader className="flex-row items-start justify-between space-y-0 gap-4">
+          <Card className="py-6">
+            <CardHeader className="flex-row items-start justify-between space-y-0 gap-4 px-6">
               <div>
                 <CardTitle>Matrix 분석 (4사분면)</CardTitle>
                 <p className="text-sm text-muted-foreground mt-1">
@@ -373,15 +374,16 @@ export default function DashboardPage() {
                   className="hidden"
                 />
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
+                  className="h-8 px-3.5"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   CSV 업로드
                 </Button>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-6">
               {matrixData.length > 0 ? (
                 <>
                   <ResponsiveContainer width="100%" height={500}>
