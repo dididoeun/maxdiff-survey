@@ -15,12 +15,26 @@ export function getDb(): Client {
 export async function initDb() {
   const db = getDb();
   await db.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      name TEXT,
+      email TEXT UNIQUE,
+      image TEXT
+    );
+    CREATE TABLE IF NOT EXISTS accounts (
+      id TEXT PRIMARY KEY,
+      userId TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      providerAccountId TEXT NOT NULL,
+      FOREIGN KEY (userId) REFERENCES users(id)
+    );
     CREATE TABLE IF NOT EXISTS surveys (
       id TEXT PRIMARY KEY,
       title TEXT NOT NULL,
       items TEXT NOT NULL,
       setSize INTEGER NOT NULL DEFAULT 4,
       jobRoles TEXT NOT NULL DEFAULT '[]',
+      userId TEXT,
       createdAt TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS responses (
@@ -36,4 +50,11 @@ export async function initDb() {
       FOREIGN KEY (surveyId) REFERENCES surveys(id)
     );
   `);
+
+  // Add userId column to existing surveys table (ignore if already exists)
+  try {
+    await db.execute("ALTER TABLE surveys ADD COLUMN userId TEXT");
+  } catch {
+    // Column already exists
+  }
 }

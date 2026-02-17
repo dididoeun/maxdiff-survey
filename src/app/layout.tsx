@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { GNB } from "@/components/gnb";
+import { AuthSessionProvider } from "@/components/session-provider";
 
 export const metadata: Metadata = {
   title: "MaxDiff 설문조사",
@@ -15,8 +16,10 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className="bg-background min-h-screen">
-        <GNB />
-        {children}
+        <AuthSessionProvider>
+          <GNB />
+          {children}
+        </AuthSessionProvider>
       </body>
     </html>
   );

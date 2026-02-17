@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, initDb } from "@/lib/db";
+import { getAuthenticatedUser, checkSurveyOwnership } from "@/lib/auth-helpers";
 
 export async function POST(
   req: NextRequest,
@@ -46,8 +47,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+    }
+
     await initDb();
     const { id: surveyId } = await params;
+
+    const isOwner = await checkSurveyOwnership(surveyId, user.id);
+    if (!isOwner) {
+      return NextResponse.json({ error: "접근 권한이 없습니다." }, { status: 403 });
+    }
+
     const db = getDb();
     const result = await db.execute({
       sql: "SELECT * FROM responses WHERE surveyId = ? ORDER BY createdAt",

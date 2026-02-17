@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, initDb } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
+import { getAuthenticatedUser } from "@/lib/auth-helpers";
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+    }
+
     await initDb();
     const body = await req.json();
     const { title, items, setSize, jobRoles } = body;
@@ -19,8 +25,8 @@ export async function POST(req: NextRequest) {
     const db = getDb();
 
     await db.execute({
-      sql: "INSERT INTO surveys (id, title, items, setSize, jobRoles) VALUES (?, ?, ?, ?, ?)",
-      args: [id, title, JSON.stringify(items), setSize || 4, JSON.stringify(jobRoles || [])],
+      sql: "INSERT INTO surveys (id, title, items, setSize, jobRoles, userId) VALUES (?, ?, ?, ?, ?, ?)",
+      args: [id, title, JSON.stringify(items), setSize || 4, JSON.stringify(jobRoles || []), user.id],
     });
 
     return NextResponse.json({ id });
@@ -35,9 +41,17 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+    }
+
     await initDb();
     const db = getDb();
-    const result = await db.execute("SELECT * FROM surveys ORDER BY createdAt DESC");
+    const result = await db.execute({
+      sql: "SELECT * FROM surveys WHERE userId = ? ORDER BY createdAt DESC",
+      args: [user.id],
+    });
     return NextResponse.json(result.rows);
   } catch (error) {
     console.error(error);
