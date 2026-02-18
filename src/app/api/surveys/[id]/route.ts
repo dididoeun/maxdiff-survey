@@ -102,3 +102,42 @@ export async function PUT(
     );
   }
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+    }
+
+    await initDb();
+    const { id } = await params;
+
+    const isOwner = await checkSurveyOwnership(id, user.id);
+    if (!isOwner) {
+      return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+    }
+
+    const db = getDb();
+
+    await db.execute({
+      sql: "DELETE FROM responses WHERE surveyId = ?",
+      args: [id],
+    });
+    await db.execute({
+      sql: "DELETE FROM surveys WHERE id = ?",
+      args: [id],
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "설문 삭제에 실패했습니다." },
+      { status: 500 }
+    );
+  }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { Copy, Download } from "lucide-react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,6 +76,7 @@ export default function DashboardPage() {
   const [matrixData, setMatrixData] = useState<MatrixData[]>([]);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState("chart");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -202,7 +204,7 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-12 text-center">
+      <div className="max-w-3xl mx-auto px-4 py-12 text-center">
         <p className="text-red-500">{error}</p>
       </div>
     );
@@ -210,7 +212,7 @@ export default function DashboardPage() {
 
   if (!survey) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-12 text-center">
+      <div className="max-w-3xl mx-auto px-4 py-12 text-center">
         <p className="text-muted-foreground">로딩 중...</p>
       </div>
     );
@@ -224,49 +226,59 @@ export default function DashboardPage() {
   const QUADRANT_COLORS = ["#10B981", "#F59E0B", "#3B82F6", "#9CA3AF"];
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="max-w-3xl mx-auto px-4 py-8">
       {/* 헤더 */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-foreground mb-1">
+        <h1 className="text-2xl font-bold text-foreground mb-2">
           {survey.title}
         </h1>
         <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-          <span>총 응답자: {respondentCount}명</span>
-          <span>항목: {survey.items.length}개</span>
+          <span>총 응답자 {respondentCount}명 · 항목 {survey.items.length}개</span>
         </div>
         <div className="flex items-center gap-2 mt-3">
           <Input
             readOnly
             value={surveyUrl}
-            className="max-w-md h-10 px-3.5"
+            className="flex-1 h-10 px-3.5"
           />
-          <Button variant="outline" onClick={copyUrl} size="sm" className="h-10 px-3.5 rounded-[0.625rem]">
+          <Button variant="outline" onClick={copyUrl} size="sm" className="h-10 px-3.5 rounded-[0.625rem] gap-1.5">
+            <Copy className="size-3.5" />
             {copied ? "복사됨!" : "URL 복사"}
           </Button>
         </div>
       </div>
 
       {/* 탭 */}
-      <Tabs defaultValue="chart">
-        <TabsList className="mb-6">
-          <TabsTrigger value="chart">막대 차트</TabsTrigger>
-          <TabsTrigger value="table">상세 테이블</TabsTrigger>
-          <TabsTrigger value="matrix">Matrix 분석</TabsTrigger>
-        </TabsList>
+      <Tabs defaultValue="chart" onValueChange={setActiveTab}>
+        <div className="flex items-center justify-between mb-6 border-b border-border h-12">
+          <TabsList variant="line" className="!h-12 gap-3 !p-0 !pb-[3px]">
+            <TabsTrigger value="chart" className="text-base px-0">MaxDiff 점수</TabsTrigger>
+            <TabsTrigger value="table" className="text-base px-0">상세 테이블</TabsTrigger>
+            <TabsTrigger value="matrix" className="text-base px-0">Matrix 분석</TabsTrigger>
+          </TabsList>
+          {activeTab === "table" && (
+            <Button
+              variant="default"
+              onClick={downloadCSV}
+              size="sm"
+              className="h-8 w-[118px] gap-1.5"
+            >
+              CSV 다운로드
+              <Download className="size-3.5" />
+            </Button>
+          )}
+        </div>
 
         {/* 막대 차트 */}
         <TabsContent value="chart">
-          <Card className="py-6">
-            <CardHeader className="px-6">
-              <CardTitle>MaxDiff 점수 (0~100)</CardTitle>
-            </CardHeader>
-            <CardContent className="px-6">
+          <Card className="py-0 bg-muted/50">
+            <CardContent className="px-4 py-6">
               {scores.length > 0 ? (
                 <ResponsiveContainer width="100%" height={Math.max(300, scores.length * 45)}>
                   <BarChart
                     data={scores}
                     layout="vertical"
-                    margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
+                    margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" domain={[0, 100]} />
@@ -277,7 +289,17 @@ export default function DashboardPage() {
                       tick={{ fontSize: 13 }}
                     />
                     <Tooltip
-                      formatter={(value) => [`${value}점`, "점수"]}
+                      cursor={false}
+                      content={({ payload }) => {
+                        if (!payload || payload.length === 0) return null;
+                        const d = payload[0].payload as { name: string; score: number };
+                        return (
+                          <div className="bg-card border border-border rounded-lg px-3 py-2 text-sm shadow-md">
+                            <p className="font-medium">{d.name}</p>
+                            <p className="text-muted-foreground">{d.score}점</p>
+                          </div>
+                        );
+                      }}
                     />
                     <Bar dataKey="score" radius={[0, 4, 4, 0]}>
                       {scores.map((_, i) => (
@@ -297,49 +319,38 @@ export default function DashboardPage() {
 
         {/* 상세 테이블 */}
         <TabsContent value="table">
-          <Card className="py-6">
-            <CardHeader className="flex-row items-center justify-between space-y-0 px-6 gap-3">
-              <CardTitle>항목별 상세 데이터</CardTitle>
-              <Button
-                variant="secondary"
-                onClick={downloadCSV}
-                size="sm"
-                className="h-8 px-3.5 !gap-0"
-              >
-                CSV 다운로드
-              </Button>
-            </CardHeader>
+          <Card className="py-0">
             <CardContent className="p-0">
               <Table>
-                <TableHeader>
+                <TableHeader className="bg-muted/50">
                   <TableRow>
-                    <TableHead className="px-4">순위</TableHead>
+                    <TableHead className="pl-6 pr-4">순위</TableHead>
                     <TableHead className="px-4">항목명</TableHead>
-                    <TableHead className="px-4 text-right">Best 횟수</TableHead>
-                    <TableHead className="px-4 text-right">Worst 횟수</TableHead>
+                    <TableHead className="px-4 text-right text-red-600">가장 시급</TableHead>
+                    <TableHead className="px-4 text-right text-green-600">가장 덜 시급</TableHead>
                     <TableHead className="px-4 text-right">노출 횟수</TableHead>
-                    <TableHead className="px-4 text-right">점수</TableHead>
+                    <TableHead className="pl-4 pr-6 text-right">점수</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {scores.map((s, i) => (
                     <TableRow key={s.name}>
-                      <TableCell className="px-4 text-muted-foreground">
+                      <TableCell className="pl-6 pr-4 text-muted-foreground">
                         {i + 1}
                       </TableCell>
                       <TableCell className="px-4 font-medium">
                         {s.name}
                       </TableCell>
-                      <TableCell className="px-4 text-right text-green-600 font-medium">
+                      <TableCell className="px-4 text-right text-red-600 font-medium">
                         {s.bestCount}
                       </TableCell>
-                      <TableCell className="px-4 text-right text-red-600 font-medium">
+                      <TableCell className="px-4 text-right text-green-600 font-medium">
                         {s.worstCount}
                       </TableCell>
                       <TableCell className="px-4 text-right text-muted-foreground">
                         {s.exposureCount}
                       </TableCell>
-                      <TableCell className="px-4 text-right font-bold text-blue-600">
+                      <TableCell className="pl-4 pr-6 text-right font-bold">
                         {s.score}
                       </TableCell>
                     </TableRow>
@@ -357,33 +368,28 @@ export default function DashboardPage() {
 
         {/* Matrix 분석 */}
         <TabsContent value="matrix">
-          <Card className="py-6">
-            <CardHeader className="flex-row items-start justify-between space-y-0 gap-4 px-6">
-              <div>
-                <CardTitle>Matrix 분석 (4사분면)</CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">
-                  외부 데이터 CSV를 업로드하세요. (형식: 항목명,사용빈도점수)
-                </p>
-              </div>
-              <div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".csv"
-                  onChange={handleMatrixCSV}
-                  className="hidden"
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-8 px-3.5"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  CSV 업로드
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="px-6">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <p className="text-sm text-muted-foreground">
+              외부 데이터 CSV를 업로드하세요. (형식: 항목명,사용빈도점수)
+            </p>
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv"
+                onChange={handleMatrixCSV}
+                className="hidden"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-8 px-3.5"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                CSV 업로드
+              </Button>
+            </div>
+          </div>
               {matrixData.length > 0 ? (
                 <>
                   <ResponsiveContainer width="100%" height={500}>
@@ -502,8 +508,6 @@ export default function DashboardPage() {
                   </p>
                 </div>
               )}
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
     </div>
