@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, initDb } from "@/lib/db";
+import { getAuthenticatedUser, checkSurveyOwnership } from "@/lib/auth-helpers";
 
 export async function GET(
   _req: NextRequest,
@@ -31,6 +32,72 @@ export async function GET(
     console.error(error);
     return NextResponse.json(
       { error: "설문 조회에 실패했습니다." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const user = await getAuthenticatedUser();
+    if (!user) {
+      return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
+    }
+
+    await initDb();
+    const { id } = await params;
+
+    const isOwner = await checkSurveyOwnership(id, user.id);
+    if (!isOwner) {
+      return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+    }
+
+    const db = getDb();
+
+    // 응답 존재 여부 확인
+    const responseCount = await db.execute({
+      sql: "SELECT COUNT(*) as cnt FROM responses WHERE surveyId = ?",
+      args: [id],
+    });
+    if (Number(responseCount.rows[0].cnt) > 0) {
+      return NextResponse.json(
+        { error: "응답이 존재하는 설문은 수정할 수 없습니다." },
+        { status: 403 }
+      );
+    }
+
+    const body = await req.json();
+    const { title, items, setSize, jobRoles, status } = body;
+
+    const surveyStatus = status === "draft" ? "draft" : "published";
+
+    if (!title || !items) {
+      return NextResponse.json(
+        { error: "제목과 항목이 필요합니다." },
+        { status: 400 }
+      );
+    }
+
+    if (surveyStatus === "published" && items.length < 2) {
+      return NextResponse.json(
+        { error: "발행하려면 최소 2개 이상의 항목이 필요합니다." },
+        { status: 400 }
+      );
+    }
+
+    await db.execute({
+      sql: "UPDATE surveys SET title = ?, items = ?, setSize = ?, jobRoles = ?, status = ? WHERE id = ?",
+      args: [title, JSON.stringify(items), setSize || 4, JSON.stringify(jobRoles || []), surveyStatus, id],
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "설문 수정에 실패했습니다." },
       { status: 500 }
     );
   }

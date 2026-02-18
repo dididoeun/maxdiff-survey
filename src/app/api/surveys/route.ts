@@ -12,11 +12,20 @@ export async function POST(req: NextRequest) {
 
     await initDb();
     const body = await req.json();
-    const { title, items, setSize, jobRoles } = body;
+    const { title, items, setSize, jobRoles, status } = body;
 
-    if (!title || !items || items.length < 2) {
+    const surveyStatus = status === "draft" ? "draft" : "published";
+
+    if (!title || !items) {
       return NextResponse.json(
-        { error: "제목과 최소 2개 이상의 항목이 필요합니다." },
+        { error: "제목과 항목이 필요합니다." },
+        { status: 400 }
+      );
+    }
+
+    if (surveyStatus === "published" && items.length < 2) {
+      return NextResponse.json(
+        { error: "발행하려면 최소 2개 이상의 항목이 필요합니다." },
         { status: 400 }
       );
     }
@@ -25,8 +34,8 @@ export async function POST(req: NextRequest) {
     const db = getDb();
 
     await db.execute({
-      sql: "INSERT INTO surveys (id, title, items, setSize, jobRoles, userId) VALUES (?, ?, ?, ?, ?, ?)",
-      args: [id, title, JSON.stringify(items), setSize || 4, JSON.stringify(jobRoles || []), user.id],
+      sql: "INSERT INTO surveys (id, title, items, setSize, jobRoles, userId, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      args: [id, title, JSON.stringify(items), setSize || 4, JSON.stringify(jobRoles || []), user.id, surveyStatus],
     });
 
     return NextResponse.json({ id });
@@ -49,7 +58,12 @@ export async function GET() {
     await initDb();
     const db = getDb();
     const result = await db.execute({
-      sql: "SELECT * FROM surveys WHERE userId = ? ORDER BY createdAt DESC",
+      sql: `SELECT s.*, COUNT(r.id) as responseCount
+            FROM surveys s
+            LEFT JOIN responses r ON s.id = r.surveyId
+            WHERE s.userId = ?
+            GROUP BY s.id
+            ORDER BY s.createdAt DESC`,
       args: [user.id],
     });
     return NextResponse.json(result.rows);

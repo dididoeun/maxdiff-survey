@@ -18,6 +18,7 @@ interface Survey {
   items: SurveyItem[];
   setSize: number;
   jobRoles: string[];
+  status?: string;
 }
 
 export default function SurveyPage() {
@@ -80,6 +81,10 @@ export default function SurveyPage() {
       .then((data) => {
         if (data.error) {
           setError(data.error);
+          return;
+        }
+        if (data.status === "draft") {
+          setError("아직 발행되지 않은 설문입니다.");
           return;
         }
         setSurvey(data);

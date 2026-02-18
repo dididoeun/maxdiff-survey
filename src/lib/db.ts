@@ -57,4 +57,11 @@ export async function initDb() {
   } catch {
     // Column already exists
   }
+
+  // Add status column to existing surveys table (ignore if already exists)
+  try {
+    await db.execute("ALTER TABLE surveys ADD COLUMN status TEXT NOT NULL DEFAULT 'published'");
+  } catch {
+    // Column already exists
+  }
 }
