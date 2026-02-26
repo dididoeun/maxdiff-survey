@@ -19,3 +19,17 @@ export async function checkSurveyOwnership(
   if (result.rows.length === 0) return false;
   return result.rows[0].userId === userId;
 }
+
+export async function checkSurveyAccess(
+  surveyId: string,
+  userId: string
+): Promise<boolean> {
+  const db = getDb();
+  const result = await db.execute({
+    sql: `SELECT 1 FROM surveys WHERE id = ? AND userId = ?
+          UNION
+          SELECT 1 FROM survey_admins WHERE surveyId = ? AND userId = ?`,
+    args: [surveyId, userId, surveyId, userId],
+  });
+  return result.rows.length > 0;
+}

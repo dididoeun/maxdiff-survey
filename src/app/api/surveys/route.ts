@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
     await initDb();
     const body = await req.json();
-    const { title, items, setSize, jobRoles, status } = body;
+    const { title, items, setSize, jobRoles, status, questions } = body;
 
     const surveyStatus = status === "draft" ? "draft" : "published";
 
@@ -38,6 +38,24 @@ export async function POST(req: NextRequest) {
       args: [id, title, JSON.stringify(items), setSize || 4, JSON.stringify(jobRoles || []), user.id, surveyStatus],
     });
 
+    // 일반 문항 저장
+    if (questions && Array.isArray(questions)) {
+      for (const q of questions) {
+        await db.execute({
+          sql: "INSERT INTO questions (id, surveyId, type, title, options, required, questionOrder) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          args: [
+            q.id || uuidv4(),
+            id,
+            q.type,
+            q.title || "",
+            JSON.stringify(q.options || []),
+            q.required ? 1 : 0,
+            q.order ?? 0,
+          ],
+        });
+      }
+    }
+
     return NextResponse.json({ id });
   } catch (error) {
     console.error(error);
@@ -58,13 +76,15 @@ export async function GET() {
     await initDb();
     const db = getDb();
     const result = await db.execute({
-      sql: `SELECT s.*, COUNT(r.id) as responseCount
+      sql: `SELECT s.*, COUNT(r.id) as responseCount,
+              CASE WHEN s.userId = ? THEN 1 ELSE 0 END as isOwner
             FROM surveys s
             LEFT JOIN responses r ON s.id = r.surveyId
-            WHERE s.userId = ?
+            LEFT JOIN survey_admins sa ON s.id = sa.surveyId AND sa.userId = ?
+            WHERE s.userId = ? OR sa.userId = ?
             GROUP BY s.id
             ORDER BY s.createdAt DESC`,
-      args: [user.id],
+      args: [user.id, user.id, user.id, user.id],
     });
     return NextResponse.json(result.rows);
   } catch (error) {

@@ -3,13 +3,22 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 
 interface SurveyItem {
   name: string;
   image?: string;
+}
+
+interface Question {
+  id: string;
+  type: "multiple_choice" | "short_answer" | "long_answer";
+  title: string;
+  options: string[];
+  required: boolean;
+  questionOrder: number;
 }
 
 interface Survey {
@@ -19,7 +28,10 @@ interface Survey {
   setSize: number;
   jobRoles: string[];
   status?: string;
+  questions: Question[];
 }
+
+type Stage = "job" | "general" | "maxdiff";
 
 export default function SurveyPage() {
   const params = useParams();
@@ -32,10 +44,16 @@ export default function SurveyPage() {
   const [worst, setWorst] = useState<string | null>(null);
   const [respondentId, setRespondentId] = useState("");
   const [jobRole, setJobRole] = useState("");
-  const [started, setStarted] = useState(false);
+  const [stage, setStage] = useState<Stage>("job");
   const [completed, setCompleted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // 일반 문항 응답
+  const [generalAnswers, setGeneralAnswers] = useState<
+    { questionId: string; answer: string | string[] }[]
+  >([]);
+  const [generalError, setGeneralError] = useState("");
 
   const generateSets = useCallback(
     (items: SurveyItem[], setSize: number): SurveyItem[][] => {
@@ -75,7 +93,8 @@ export default function SurveyPage() {
   );
 
   useEffect(() => {
-    setRespondentId(crypto.randomUUID());
+    const id = crypto.randomUUID();
+    setRespondentId(id);
     fetch(`/api/surveys/${surveyId}`)
       .then((r) => r.json())
       .then((data) => {
@@ -89,9 +108,66 @@ export default function SurveyPage() {
         }
         setSurvey(data);
         setSets(generateSets(data.items, data.setSize));
+        // 일반 문항 초기 응답값 세팅
+        if (data.questions?.length > 0) {
+          setGeneralAnswers(
+            data.questions.map((q: Question) => ({
+              questionId: q.id,
+              answer: q.type === "multiple_choice" ? [] : "",
+            }))
+          );
+        }
+        // 직군 없으면 바로 general 또는 maxdiff 단계로
+        if (!data.jobRoles || data.jobRoles.length === 0) {
+          if (data.questions?.length > 0) {
+            setStage("general");
+          } else {
+            setStage("maxdiff");
+          }
+        }
       })
       .catch(() => setError("설문을 불러올 수 없습니다."));
   }, [surveyId, generateSets]);
+
+  const handleGeneralAnswer = (
+    questionId: string,
+    value: string | string[]
+  ) => {
+    setGeneralAnswers((prev) =>
+      prev.map((a) => (a.questionId === questionId ? { ...a, answer: value } : a))
+    );
+  };
+
+  const submitGeneralAnswers = async () => {
+    if (!survey) return;
+    // 필수 문항 검증
+    for (const q of survey.questions) {
+      if (!q.required) continue;
+      const ans = generalAnswers.find((a) => a.questionId === q.id);
+      if (!ans) continue;
+      const isEmpty =
+        Array.isArray(ans.answer)
+          ? ans.answer.length === 0
+          : String(ans.answer).trim() === "";
+      if (isEmpty) {
+        setGeneralError(`"${q.title || "문항"}"은 필수 입력입니다.`);
+        return;
+      }
+    }
+    setGeneralError("");
+    setSubmitting(true);
+    try {
+      await fetch(`/api/surveys/${surveyId}/general-responses`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ respondentId, answers: generalAnswers }),
+      });
+    } catch {
+      // 저장 실패해도 진행
+    }
+    setSubmitting(false);
+    setStage("maxdiff");
+  };
 
   const handleSelect = (itemName: string, type: "best" | "worst") => {
     if (type === "best") {
@@ -158,8 +234,8 @@ export default function SurveyPage() {
     );
   }
 
-  // 직군 선택 화면 (직군 항목이 있는 경우에만)
-  if (!started && survey.jobRoles.length > 0) {
+  // 직군 선택 화면
+  if (stage === "job" && survey.jobRoles.length > 0) {
     return (
       <div className="max-w-lg mx-auto px-4 py-12">
         <h2 className="text-2xl font-semibold text-foreground">{survey.title}</h2>
@@ -187,7 +263,13 @@ export default function SurveyPage() {
         </div>
 
         <Button
-          onClick={() => setStarted(true)}
+          onClick={() => {
+            if (survey.questions?.length > 0) {
+              setStage("general");
+            } else {
+              setStage("maxdiff");
+            }
+          }}
           disabled={!jobRole}
           className="w-full h-10 px-3.5"
           size="lg"
@@ -198,6 +280,91 @@ export default function SurveyPage() {
     );
   }
 
+  // 일반 문항 응답 화면
+  if (stage === "general" && survey.questions?.length > 0) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-12">
+        <h2 className="text-xl font-bold text-foreground mb-1">{survey.title}</h2>
+        <p className="text-sm text-muted-foreground mb-6">사전 질문에 답해주세요.</p>
+
+        <div className="space-y-6">
+          {survey.questions.map((q) => {
+            const ans = generalAnswers.find((a) => a.questionId === q.id);
+            return (
+              <Card key={q.id} className="border-border">
+                <CardContent className="p-4 space-y-3">
+                  <p className="text-sm font-medium text-foreground">
+                    {q.title}
+                    {q.required && <span className="text-red-500 ml-0.5">*</span>}
+                  </p>
+
+                  {q.type === "multiple_choice" && (
+                    <div className="space-y-2">
+                      {q.options.map((opt, i) => (
+                        <label
+                          key={i}
+                          className="flex items-center gap-2 cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-muted transition-colors has-[:checked]:border-primary/30 has-[:checked]:bg-primary/5"
+                        >
+                          <input
+                            type="radio"
+                            name={`q-${q.id}`}
+                            value={opt}
+                            checked={
+                              Array.isArray(ans?.answer)
+                                ? ans.answer.includes(opt)
+                                : ans?.answer === opt
+                            }
+                            onChange={() => handleGeneralAnswer(q.id, opt)}
+                            className="size-4 accent-primary shrink-0"
+                          />
+                          <span className="text-sm text-foreground">{opt}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
+
+                  {q.type === "short_answer" && (
+                    <input
+                      type="text"
+                      value={typeof ans?.answer === "string" ? ans.answer : ""}
+                      onChange={(e) => handleGeneralAnswer(q.id, e.target.value)}
+                      placeholder="답변을 입력하세요"
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                  )}
+
+                  {q.type === "long_answer" && (
+                    <textarea
+                      value={typeof ans?.answer === "string" ? ans.answer : ""}
+                      onChange={(e) => handleGeneralAnswer(q.id, e.target.value)}
+                      placeholder="답변을 입력하세요"
+                      rows={4}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        {generalError && (
+          <p className="mt-3 text-sm text-red-500">{generalError}</p>
+        )}
+
+        <Button
+          onClick={submitGeneralAnswers}
+          disabled={submitting}
+          className="w-full h-10 mt-6"
+          size="lg"
+        >
+          {submitting ? "저장 중..." : "다음"}
+        </Button>
+      </div>
+    );
+  }
+
+  // MaxDiff 라운드 화면
   const currentSet = sets[currentRound];
   const progressValue = ((currentRound + 1) / sets.length) * 100;
 

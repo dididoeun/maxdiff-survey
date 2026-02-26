@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, initDb } from "@/lib/db";
+import { v4 as uuidv4 } from "uuid";
 import { getAuthenticatedUser, checkSurveyOwnership } from "@/lib/auth-helpers";
 
 export async function GET(
@@ -23,10 +24,22 @@ export async function GET(
       );
     }
 
+    const questionsResult = await db.execute({
+      sql: "SELECT * FROM questions WHERE surveyId = ? ORDER BY questionOrder",
+      args: [id],
+    });
+
+    const questions = questionsResult.rows.map((q) => ({
+      ...q,
+      options: JSON.parse((q.options as string) || "[]"),
+      required: Boolean(q.required),
+    }));
+
     return NextResponse.json({
       ...survey,
       items: JSON.parse(survey.items as string),
       jobRoles: JSON.parse((survey.jobRoles as string) || "[]"),
+      questions,
     });
   } catch (error) {
     console.error(error);
@@ -70,7 +83,7 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { title, items, setSize, jobRoles, status } = body;
+    const { title, items, setSize, jobRoles, status, questions } = body;
 
     const surveyStatus = status === "draft" ? "draft" : "published";
 
@@ -92,6 +105,28 @@ export async function PUT(
       sql: "UPDATE surveys SET title = ?, items = ?, setSize = ?, jobRoles = ?, status = ? WHERE id = ?",
       args: [title, JSON.stringify(items), setSize || 4, JSON.stringify(jobRoles || []), surveyStatus, id],
     });
+
+    // 기존 questions 삭제 후 새로 INSERT
+    await db.execute({
+      sql: "DELETE FROM questions WHERE surveyId = ?",
+      args: [id],
+    });
+    if (questions && Array.isArray(questions)) {
+      for (const q of questions) {
+        await db.execute({
+          sql: "INSERT INTO questions (id, surveyId, type, title, options, required, questionOrder) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          args: [
+            q.id || uuidv4(),
+            id,
+            q.type,
+            q.title || "",
+            JSON.stringify(q.options || []),
+            q.required ? 1 : 0,
+            q.order ?? 0,
+          ],
+        });
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -123,14 +158,11 @@ export async function DELETE(
 
     const db = getDb();
 
-    await db.execute({
-      sql: "DELETE FROM responses WHERE surveyId = ?",
-      args: [id],
-    });
-    await db.execute({
-      sql: "DELETE FROM surveys WHERE id = ?",
-      args: [id],
-    });
+    await db.execute({ sql: "DELETE FROM survey_admins WHERE surveyId = ?", args: [id] });
+    await db.execute({ sql: "DELETE FROM general_responses WHERE surveyId = ?", args: [id] });
+    await db.execute({ sql: "DELETE FROM questions WHERE surveyId = ?", args: [id] });
+    await db.execute({ sql: "DELETE FROM responses WHERE surveyId = ?", args: [id] });
+    await db.execute({ sql: "DELETE FROM surveys WHERE id = ?", args: [id] });
 
     return NextResponse.json({ success: true });
   } catch (error) {

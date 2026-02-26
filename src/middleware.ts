@@ -12,7 +12,7 @@ export default auth((req) => {
   );
 
   if (isProtected && !req.auth) {
-    const signInUrl = new URL("/api/auth/signin", req.nextUrl.origin);
+    const signInUrl = new URL("/google-redirect", req.nextUrl.origin);
     signInUrl.searchParams.set("callbackUrl", req.url);
     return Response.redirect(signInUrl);
   }

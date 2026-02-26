@@ -27,13 +27,13 @@ export default function Home() {
   return (
     <div className="max-w-3xl mx-auto px-4 pt-[60px] pb-12 text-center">
       <h1 className="text-[40px] font-bold text-foreground mb-2">
-        자급자족 컴포넌트 조사
+        원티드 UX 리서치
       </h1>
       <p className="text-muted-foreground">
-        MaxDiff 조사를 만들고 결과를 분석할 수 있어요.
+        UX 리서치를 위한 설문조사를 만들고 결과를 분석하세요.
       </p>
 
-      <Link href="/admin" className={cn(buttonVariants({ size: "lg" }), "mt-[32px] mb-[48px] h-10 px-3.5")}>
+      <Link href="/admin" className={cn(buttonVariants({ variant: "secondary", size: "lg" }), "mt-[32px] mb-[48px] h-10 px-3.5")}>
         + 새 설문 만들기
       </Link>
 

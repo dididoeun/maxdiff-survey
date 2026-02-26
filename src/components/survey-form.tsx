@@ -1,17 +1,72 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, ThumbsUp, CircleCheck, Equal, AlignJustify, ChevronDown, GripVertical } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+// ── 타입 ──────────────────────────────────────────────────────────────────────
 
 interface ItemInput {
   id: string;
   name: string;
   image?: string;
+}
+
+interface MaxDiffBlock {
+  id: string;
+  type: "maxdiff";
+  items: ItemInput[];
+  setSize: number;
+  order: number;
+}
+
+interface GeneralBlock {
+  id: string;
+  type: "multiple_choice" | "short_answer" | "long_answer";
+  title: string;
+  options: string[];
+  required: boolean;
+  order: number;
+}
+
+type Block = MaxDiffBlock | GeneralBlock;
+
+export interface Question {
+  id: string;
+  type: "multiple_choice" | "short_answer" | "long_answer";
+  title: string;
+  options: string[];
+  required: boolean;
+  order: number;
 }
 
 export interface SurveyFormData {
@@ -20,6 +75,7 @@ export interface SurveyFormData {
   setSize: number;
   jobRoles: string[];
   status?: string;
+  questions?: Question[];
 }
 
 interface SurveyFormProps {
@@ -28,66 +84,245 @@ interface SurveyFormProps {
   surveyId?: string;
 }
 
+// ── 레이블 ───────────────────────────────────────────────────────────────────
+
+const BLOCK_TYPE_LABELS: Record<Block["type"], string> = {
+  maxdiff: "MaxDiff 문항",
+  multiple_choice: "객관식",
+  short_answer: "단답형",
+  long_answer: "장문형",
+};
+
+const BLOCK_TYPE_ICONS: Record<Block["type"], React.ReactNode> = {
+  maxdiff:         <ThumbsUp className="size-4" />,
+  multiple_choice: <CircleCheck className="size-4" />,
+  short_answer:    <Equal className="size-4" />,
+  long_answer:     <AlignJustify className="size-4" />,
+};
+
+const ADD_OPTIONS: Block["type"][] = [
+  "maxdiff",
+  "multiple_choice",
+  "short_answer",
+  "long_answer",
+];
+
+// ── 초기 블록 생성 헬퍼 ──────────────────────────────────────────────────────
+
+function createBlock(type: Block["type"], order: number): Block {
+  if (type === "maxdiff") {
+    return { id: crypto.randomUUID(), type: "maxdiff", items: [], setSize: 4, order };
+  }
+  return {
+    id: crypto.randomUUID(),
+    type,
+    title: "",
+    options: type === "multiple_choice" ? ["", ""] : [],
+    required: true,
+    order,
+  };
+}
+
+function initBlocks(initialData?: SurveyFormData): Block[] {
+  const blocks: Block[] = [];
+  // MaxDiff 블록 (초기 데이터에 items가 있으면 복원)
+  if (initialData && initialData.items.length > 0) {
+    blocks.push({
+      id: crypto.randomUUID(),
+      type: "maxdiff",
+      items: initialData.items.map((i) => ({ id: crypto.randomUUID(), ...i })),
+      setSize: initialData.setSize || 4,
+      order: 0,
+    });
+  }
+  // 일반 문항 블록
+  if (initialData?.questions) {
+    initialData.questions.forEach((q, i) => {
+      blocks.push({
+        id: q.id || crypto.randomUUID(),
+        type: q.type,
+        title: q.title,
+        options: q.options || [],
+        required: q.required ?? true,
+        order: blocks.length + i,
+      });
+    });
+  }
+  return blocks;
+}
+
+// ── 컴포넌트 ─────────────────────────────────────────────────────────────────
+
 export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormProps) {
   const router = useRouter();
   const [title, setTitle] = useState(initialData?.title || "");
-  const [items, setItems] = useState<ItemInput[]>(
-    initialData?.items?.map((i) => ({ id: crypto.randomUUID(), ...i })) || []
-  );
-  const [setSize, setSetSize] = useState(initialData?.setSize || 4);
-  const [newItemName, setNewItemName] = useState("");
-  const [jobRoles, setJobRoles] = useState<string[]>(initialData?.jobRoles || []);
-  const [newRole, setNewRole] = useState("");
-  const [uploading, setUploading] = useState(false);
+  const [blocks, setBlocks] = useState<Block[]>(() => initBlocks(initialData));
+  const [uploading, setUploading] = useState<string | null>(null); // blockId
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [savingType, setSavingType] = useState<"draft" | "published" | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const addItem = () => {
-    if (!newItemName.trim()) return;
-    setItems([
-      ...items,
-      { id: crypto.randomUUID(), name: newItemName.trim() },
-    ]);
-    setNewItemName("");
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  // ── 블록 조작 ──────────────────────────────────────────────────────────────
+
+  const addBlock = (type: Block["type"]) => {
+    setBlocks((prev) => [...prev, createBlock(type, prev.length)]);
   };
 
-  const removeItem = (id: string) => {
-    setItems(items.filter((i) => i.id !== id));
+  const removeBlock = (id: string) => {
+    setBlocks((prev) =>
+      prev.filter((b) => b.id !== id).map((b, i) => ({ ...b, order: i }))
+    );
   };
 
-  const handleImageUpload = async (itemId: string, file: File) => {
-    setUploading(true);
+  const moveBlock = (id: string, dir: "up" | "down") => {
+    setBlocks((prev) => {
+      const idx = prev.findIndex((b) => b.id === id);
+      if (dir === "up" && idx === 0) return prev;
+      if (dir === "down" && idx === prev.length - 1) return prev;
+      const next = [...prev];
+      const swap = dir === "up" ? idx - 1 : idx + 1;
+      [next[idx], next[swap]] = [next[swap], next[idx]];
+      return next.map((b, i) => ({ ...b, order: i }));
+    });
+  };
+
+  const updateBlock = (id: string, patch: Partial<Block>) => {
+    setBlocks((prev) =>
+      prev.map((b) => (b.id === id ? ({ ...b, ...patch } as Block) : b))
+    );
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setBlocks((prev) => {
+      const oldIndex = prev.findIndex((b) => b.id === active.id);
+      const newIndex = prev.findIndex((b) => b.id === over.id);
+      return arrayMove(prev, oldIndex, newIndex).map((b, i) => ({ ...b, order: i }));
+    });
+  };
+
+  const changeBlockType = (id: string, type: Block["type"]) => {
+    setBlocks((prev) =>
+      prev.map((b) => {
+        if (b.id !== id) return b;
+        if (type === "maxdiff") {
+          return { id: b.id, type: "maxdiff", items: [], setSize: 4, order: b.order };
+        }
+        return {
+          id: b.id,
+          type,
+          title: b.type !== "maxdiff" ? b.title : "",
+          options: type === "multiple_choice" ? ["", ""] : [],
+          required: b.type !== "maxdiff" ? b.required : true,
+          order: b.order,
+        };
+      })
+    );
+  };
+
+  // ── MaxDiff 블록 조작 ──────────────────────────────────────────────────────
+
+  const addItem = (blockId: string, name: string) => {
+    if (!name.trim()) return;
+    setBlocks((prev) =>
+      prev.map((b) =>
+        b.id === blockId && b.type === "maxdiff"
+          ? { ...b, items: [...b.items, { id: crypto.randomUUID(), name: name.trim() }] }
+          : b
+      )
+    );
+  };
+
+  const removeItem = (blockId: string, itemId: string) => {
+    setBlocks((prev) =>
+      prev.map((b) =>
+        b.id === blockId && b.type === "maxdiff"
+          ? { ...b, items: b.items.filter((i) => i.id !== itemId) }
+          : b
+      )
+    );
+  };
+
+  const handleImageUpload = async (blockId: string, itemId: string, file: File) => {
+    setUploading(itemId);
     const formData = new FormData();
     formData.append("file", file);
     try {
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       const data = await res.json();
       if (data.path) {
-        setItems(
-          items.map((i) => (i.id === itemId ? { ...i, image: data.path } : i))
+        setBlocks((prev) =>
+          prev.map((b) =>
+            b.id === blockId && b.type === "maxdiff"
+              ? { ...b, items: b.items.map((i) => (i.id === itemId ? { ...i, image: data.path } : i)) }
+              : b
+          )
         );
       }
     } catch {
       alert("이미지 업로드에 실패했습니다.");
     }
-    setUploading(false);
+    setUploading(null);
   };
+
+  // ── 객관식 선택지 조작 ─────────────────────────────────────────────────────
+
+  const addOption = (blockId: string) => {
+    setBlocks((prev) =>
+      prev.map((b) =>
+        b.id === blockId && b.type !== "maxdiff"
+          ? { ...b, options: [...b.options, ""] }
+          : b
+      )
+    );
+  };
+
+  const updateOption = (blockId: string, idx: number, value: string) => {
+    setBlocks((prev) =>
+      prev.map((b) =>
+        b.id === blockId && b.type !== "maxdiff"
+          ? { ...b, options: b.options.map((o, i) => (i === idx ? value : o)) }
+          : b
+      )
+    );
+  };
+
+  const removeOption = (blockId: string, idx: number) => {
+    setBlocks((prev) =>
+      prev.map((b) =>
+        b.id === blockId && b.type !== "maxdiff" && b.options.length > 2
+          ? { ...b, options: b.options.filter((_, i) => i !== idx) }
+          : b
+      )
+    );
+  };
+
+  // ── 제출 ──────────────────────────────────────────────────────────────────
 
   const submitSurvey = async (status: "published" | "draft") => {
     if (!title.trim()) return alert("설문 제목을 입력해주세요.");
-    if (status === "published" && items.length < 2)
-      return alert("발행하려면 최소 2개 이상의 항목을 추가해주세요.");
+
+    const maxdiffBlock = blocks.find((b): b is MaxDiffBlock => b.type === "maxdiff");
+    const items = maxdiffBlock?.items.map((i) => ({ name: i.name, image: i.image })) ?? [];
+    const setSize = maxdiffBlock?.setSize ?? 4;
+
+    if (status === "published" && items.length < 2) {
+      return alert("발행하려면 MaxDiff 문항에 최소 2개 이상의 항목을 추가해주세요.");
+    }
+
+    const questions: Question[] = blocks
+      .filter((b): b is GeneralBlock => b.type !== "maxdiff")
+      .map((b, i) => ({ ...b, order: i }));
 
     setSavingType(status);
     try {
-      const payload = {
-        title,
-        items: items.map((i) => ({ name: i.name, image: i.image })),
-        setSize,
-        jobRoles,
-        status,
-      };
+      const payload = { title, items, setSize, jobRoles: [], status, questions };
 
       if (mode === "edit" && surveyId) {
         const res = await fetch(`/api/surveys/${surveyId}`, {
@@ -101,11 +336,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
           setSavingType(null);
           return;
         }
-        if (status === "draft") {
-          router.push("/dashboards");
-        } else {
-          setCreatedId(surveyId);
-        }
+        status === "draft" ? router.push("/dashboards") : setCreatedId(surveyId);
       } else {
         const res = await fetch("/api/surveys", {
           method: "POST",
@@ -114,11 +345,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         });
         const data = await res.json();
         if (data.id) {
-          if (status === "draft") {
-            router.push("/dashboards");
-          } else {
-            setCreatedId(data.id);
-          }
+          status === "draft" ? router.push("/dashboards") : setCreatedId(data.id);
         }
       }
     } catch {
@@ -138,33 +365,27 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // ── 완료 화면 ─────────────────────────────────────────────────────────────
+
   if (createdId) {
     return (
-      <div className="max-w-xl mx-auto px-4 py-12 text-center">
+      <div className="max-w-3xl mx-auto px-4 py-12 text-center">
         <img src="/success.svg" alt="" className="mx-auto mb-4" />
         <h2 className="text-2xl font-semibold text-foreground">
           {mode === "edit" ? "설문을 수정했어요!" : "설문을 만들었어요!"}
         </h2>
         <p className="text-muted-foreground mt-1 mb-6">아래 URL을 응답자에게 공유하세요.</p>
-
         <div className="flex items-center gap-2 mb-6">
           <Input readOnly value={surveyUrl} className="h-10 px-3.5" />
           <Button variant="outline" onClick={copyUrl} className="whitespace-nowrap h-10 px-3.5">
             {copied ? "복사됨!" : "URL 복사"}
           </Button>
         </div>
-
         <div className="flex gap-2 justify-center">
-          <Button
-            variant="secondary"
-            onClick={() => router.push(`/survey/${createdId}`)}
-          >
+          <Button variant="secondary" onClick={() => router.push(`/survey/${createdId}`)}>
             설문 미리보기
           </Button>
-          <Button
-            variant="secondary"
-            onClick={() => router.push(`/dashboard/${createdId}`)}
-          >
+          <Button variant="secondary" onClick={() => router.push(`/dashboard/${createdId}`)}>
             대시보드 보기
           </Button>
         </div>
@@ -172,14 +393,16 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
     );
   }
 
+  // ── 폼 ────────────────────────────────────────────────────────────────────
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-12">
+    <div className="max-w-3xl mx-auto px-4 py-12">
       <h1 className="text-2xl font-bold text-foreground mb-8">
-        {mode === "edit" ? "설문 수정하기" : "새 MaxDiff 설문 만들기"}
+        {mode === "edit" ? "설문 수정하기" : "새 설문 만들기"}
       </h1>
 
       {/* 설문 제목 */}
-      <div className="mb-6">
+      <div className="mb-8">
         <Label htmlFor="title">설문 제목</Label>
         <Input
           id="title"
@@ -191,155 +414,61 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         />
       </div>
 
-      {/* 세트 크기 */}
-      <div className="mb-6">
-        <Label htmlFor="setSize">한 세트에 보여줄 항목 수</Label>
-        <Input
-          id="setSize"
-          type="number"
-          min={2}
-          max={8}
-          value={setSize}
-          onChange={(e) => setSetSize(Number(e.target.value))}
-          className="w-24 mt-2 h-10 px-3.5"
-        />
-      </div>
-
-      {/* 직군 항목 */}
-      <div className="mb-6">
-        <Label>응답자 직군 항목</Label>
-        <form className="flex gap-2 mt-2 mb-2" onSubmit={(e) => {
-          e.preventDefault();
-          if (!newRole.trim()) return;
-          if (!jobRoles.includes(newRole.trim())) {
-            setJobRoles([...jobRoles, newRole.trim()]);
-          }
-          setNewRole("");
-        }}>
-          <Input
-            type="text"
-            value={newRole}
-            onChange={(e) => setNewRole(e.target.value)}
-            placeholder="직군 이름 (예: 디자이너)"
-            className="h-10 px-3.5"
-          />
-          <Button
-            type="submit"
-            variant="outline"
-            className="h-10 px-3.5"
-          >
-            추가
-          </Button>
-        </form>
-        {jobRoles.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {jobRoles.map((role) => (
-              <Badge
-                key={role}
-                variant="secondary"
-                className="gap-1 h-6"
-              >
-                {role}
-                <button
-                  onClick={() => setJobRoles(jobRoles.filter((r) => r !== role))}
-                  className="ml-0.5 hover:text-destructive"
-                >
-                  ×
-                </button>
-              </Badge>
-            ))}
-          </div>
-        )}
-        {jobRoles.length === 0 && (
-          <p className="text-xs text-muted-foreground">
-            직군을 추가하지 않으면 설문 시작 시 직군 선택 단계가 생략됩니다.
-          </p>
-        )}
-      </div>
-
-      {/* 항목 추가 */}
-      <div className="mb-6">
-        <Label>평가 항목 추가</Label>
-        <form className="flex gap-2 mt-2" onSubmit={(e) => { e.preventDefault(); addItem(); }}>
-          <Input
-            type="text"
-            value={newItemName}
-            onChange={(e) => setNewItemName(e.target.value)}
-            placeholder="항목 이름 (예: Button)"
-            className="h-10 px-3.5"
-          />
-          <Button type="submit" variant="outline" className="h-10 px-3.5">
-            추가
-          </Button>
-        </form>
-      </div>
-
-      {/* 항목 목록 */}
-      {items.length > 0 && (
-        <div className="mb-8 space-y-3">
-          <p className="text-sm font-medium text-foreground">
-            항목 목록 ({items.length}개)
-          </p>
-          {items.map((item) => (
-            <Card key={item.id} className="h-24">
-              <CardContent className="flex items-center gap-4 p-4 h-full">
-                {/* 이미지 미리보기 / 업로드 */}
-                <div className="w-16 h-16 flex-shrink-0 bg-muted rounded-lg overflow-hidden flex items-center justify-center">
-                  {item.image ? (
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <label className="cursor-pointer text-muted-foreground text-xs text-center hover:text-muted-foreground">
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/gif,image/webp"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleImageUpload(item.id, file);
-                        }}
-                      />
-                      {uploading ? "..." : <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>}
-                    </label>
-                  )}
-                </div>
-
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">{item.name}</p>
-                  {item.image && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive h-auto p-0"
-                      onClick={() =>
-                        setItems(
-                          items.map((i) =>
-                            i.id === item.id ? { ...i, image: undefined } : i
-                          )
-                        )
-                      }
-                    >
-                      이미지 삭제
-                    </Button>
-                  )}
-                </div>
-
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-destructive text-xl"
-                  onClick={() => removeItem(item.id)}
-                >
-                  ×
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+      {/* 문항 블록 목록 */}
+      {blocks.length > 0 && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-4 mb-6">
+              {blocks.map((block, idx) => (
+                <SortableBlockCard
+                  key={block.id}
+                  block={block}
+                  idx={idx}
+                  totalBlocks={blocks.length}
+                  uploading={uploading}
+                  onMove={moveBlock}
+                  onRemove={removeBlock}
+                  onUpdate={updateBlock}
+                  onChangeType={changeBlockType}
+                  onAddItem={addItem}
+                  onRemoveItem={removeItem}
+                  onImageUpload={handleImageUpload}
+                  onAddOption={addOption}
+                  onUpdateOption={updateOption}
+                  onRemoveOption={removeOption}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
+
+      {/* 문항 추가하기 드롭다운 */}
+      <div className="mb-10">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className={cn(
+              buttonVariants({ variant: "outline", size: "lg" }),
+              "w-full gap-2"
+            )}
+          >
+            <Plus className="size-4" />
+            문항 추가하기
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            {ADD_OPTIONS.map((type) => (
+              <DropdownMenuItem
+                key={type}
+                onClick={() => addBlock(type)}
+                className="h-8 gap-2 cursor-pointer"
+              >
+                {BLOCK_TYPE_ICONS[type]}
+                {BLOCK_TYPE_LABELS[type]}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {/* 저장 버튼 */}
       <div className="flex gap-3">
@@ -362,5 +491,227 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         </Button>
       </div>
     </div>
+  );
+}
+
+// ── Sortable 래퍼 ─────────────────────────────────────────────────────────────
+
+function SortableBlockCard(props: BlockCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: props.block.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn("group/sortable relative", isDragging && "opacity-50")}>
+      <div
+        className="absolute -left-6 top-3 opacity-0 group-hover/sortable:opacity-100 transition-opacity cursor-grab active:cursor-grabbing touch-none"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="size-4 text-muted-foreground" />
+      </div>
+      <BlockCard {...props} />
+    </div>
+  );
+}
+
+// ── 블록 카드 컴포넌트 ────────────────────────────────────────────────────────
+
+interface BlockCardProps {
+  block: Block;
+  idx: number;
+  totalBlocks: number;
+  uploading: string | null;
+  onMove: (id: string, dir: "up" | "down") => void;
+  onRemove: (id: string) => void;
+  onUpdate: (id: string, patch: Partial<Block>) => void;
+  onChangeType: (id: string, type: Block["type"]) => void;
+  onAddItem: (blockId: string, name: string) => void;
+  onRemoveItem: (blockId: string, itemId: string) => void;
+  onImageUpload: (blockId: string, itemId: string, file: File) => void;
+  onAddOption: (blockId: string) => void;
+  onUpdateOption: (blockId: string, idx: number, value: string) => void;
+  onRemoveOption: (blockId: string, idx: number) => void;
+}
+
+function BlockCard({
+  block, idx, totalBlocks, uploading,
+  onMove, onRemove, onUpdate, onChangeType,
+  onAddItem, onRemoveItem, onImageUpload,
+  onAddOption, onUpdateOption, onRemoveOption,
+}: BlockCardProps) {
+  const [newItemName, setNewItemName] = useState("");
+
+  return (
+    <Card className="border-border">
+      <CardContent className="px-4 py-0 space-y-4">
+        {/* 블록 헤더 */}
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={cn(
+                buttonVariants({ variant: "secondary", size: "sm" }),
+                "h-7 gap-1.5 text-xs px-2"
+              )}
+            >
+              {BLOCK_TYPE_ICONS[block.type]}
+              {BLOCK_TYPE_LABELS[block.type]}
+              <ChevronDown className="size-3 opacity-60" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              {ADD_OPTIONS.map((type) => (
+                <DropdownMenuItem
+                  key={type}
+                  onClick={() => onChangeType(block.id, type)}
+                  className="h-8 gap-2 cursor-pointer"
+                >
+                  {BLOCK_TYPE_ICONS[type]}
+                  {BLOCK_TYPE_LABELS[type]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <div className="flex-1" />
+          <div className="flex items-center gap-1">
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"
+              disabled={idx === 0} onClick={() => onMove(block.id, "up")}>↑</Button>
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"
+              disabled={idx === totalBlocks - 1} onClick={() => onMove(block.id, "down")}>↓</Button>
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive text-muted-foreground"
+              onClick={() => onRemove(block.id)}>×</Button>
+          </div>
+        </div>
+
+        {/* MaxDiff 블록 */}
+        {block.type === "maxdiff" && (
+          <div className="space-y-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`setSize-${block.id}`} className="text-sm">한 세트에 보여줄 항목 수</Label>
+              <Input
+                id={`setSize-${block.id}`}
+                type="number"
+                min={2}
+                max={8}
+                value={block.setSize}
+                onChange={(e) => onUpdate(block.id, { setSize: Number(e.target.value) } as Partial<MaxDiffBlock>)}
+                className="w-20 h-8 px-2.5 text-sm"
+              />
+            </div>
+
+            <form
+              className="flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                onAddItem(block.id, newItemName);
+                setNewItemName("");
+              }}
+            >
+              <Input
+                type="text"
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+                placeholder="항목 이름 (예: Button)"
+                className="h-9 px-3 text-sm"
+              />
+              <Button type="submit" variant="outline" className="h-9 px-3 text-sm shrink-0">
+                항목 추가
+              </Button>
+            </form>
+
+            {block.items.length > 0 && (
+              <div className="space-y-2">
+                {block.items.map((item) => (
+                  <div key={item.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                    <div className="w-10 h-10 shrink-0 bg-muted rounded-md overflow-hidden flex items-center justify-center">
+                      {item.image ? (
+                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <label className="cursor-pointer text-muted-foreground">
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/gif,image/webp"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) onImageUpload(block.id, item.id, file);
+                            }}
+                          />
+                          {uploading === item.id ? (
+                            <span className="text-xs">...</span>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                          )}
+                        </label>
+                      )}
+                    </div>
+                    <span className="flex-1 text-sm text-foreground">{item.name}</span>
+                    {item.image && (
+                      <Button variant="ghost" size="sm" className="h-6 text-xs text-destructive hover:text-destructive px-1"
+                        onClick={() => onUpdate(block.id, { items: block.items.map((i) => i.id === item.id ? { ...i, image: undefined } : i) } as Partial<MaxDiffBlock>)}>
+                        이미지 삭제
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                      onClick={() => onRemoveItem(block.id, item.id)}>×</Button>
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground">{block.items.length}개 항목 추가됨</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 일반 문항 블록 */}
+        {block.type !== "maxdiff" && (
+          <div className="space-y-3">
+            <Input
+              value={block.title}
+              onChange={(e) => onUpdate(block.id, { title: e.target.value } as Partial<GeneralBlock>)}
+              placeholder="문항 내용을 입력하세요"
+              className="h-9 px-3 text-sm"
+            />
+
+            {block.type === "multiple_choice" && (
+              <div className="space-y-2 pl-1">
+                {block.options.map((opt, optIdx) => (
+                  <div key={optIdx} className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground w-4 shrink-0">{optIdx + 1}.</span>
+                    <Input
+                      value={opt}
+                      onChange={(e) => onUpdateOption(block.id, optIdx, e.target.value)}
+                      placeholder={`선택지 ${optIdx + 1}`}
+                      className="flex-1 h-8 px-2.5 text-sm"
+                    />
+                    <Button type="button" variant="ghost" size="icon"
+                      className="h-7 w-7 hover:text-destructive text-muted-foreground shrink-0"
+                      onClick={() => onRemoveOption(block.id, optIdx)}
+                      disabled={block.options.length <= 2}>×</Button>
+                  </div>
+                ))}
+                <Button type="button" variant="ghost" size="sm"
+                  className="h-7 text-xs text-muted-foreground pl-6"
+                  onClick={() => onAddOption(block.id)}>
+                  + 선택지 추가
+                </Button>
+              </div>
+            )}
+
+            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground">
+              <Checkbox
+                checked={block.required}
+                onCheckedChange={(checked) =>
+                  onUpdate(block.id, { required: checked } as Partial<GeneralBlock>)
+                }
+              />
+              필수 문항
+            </label>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

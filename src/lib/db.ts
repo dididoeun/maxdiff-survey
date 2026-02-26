@@ -51,6 +51,38 @@ export async function initDb() {
     );
   `);
 
+  await db.executeMultiple(`
+    CREATE TABLE IF NOT EXISTS survey_admins (
+      id TEXT PRIMARY KEY,
+      surveyId TEXT NOT NULL,
+      userId TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (surveyId) REFERENCES surveys(id),
+      FOREIGN KEY (userId) REFERENCES users(id)
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_survey_admins_unique ON survey_admins(surveyId, userId);
+    CREATE TABLE IF NOT EXISTS questions (
+      id TEXT PRIMARY KEY,
+      surveyId TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      options TEXT NOT NULL DEFAULT '[]',
+      required INTEGER NOT NULL DEFAULT 1,
+      questionOrder INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (surveyId) REFERENCES surveys(id)
+    );
+    CREATE TABLE IF NOT EXISTS general_responses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      surveyId TEXT NOT NULL,
+      questionId TEXT NOT NULL,
+      respondentId TEXT NOT NULL,
+      answer TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (surveyId) REFERENCES surveys(id),
+      FOREIGN KEY (questionId) REFERENCES questions(id)
+    );
+  `);
+
   // Add userId column to existing surveys table (ignore if already exists)
   try {
     await db.execute("ALTER TABLE surveys ADD COLUMN userId TEXT");

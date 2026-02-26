@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Copy, Download } from "lucide-react";
+import { Copy, Download, X } from "lucide-react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,11 +37,22 @@ interface SurveyItem {
   image?: string;
 }
 
+interface Question {
+  id: string;
+  type: "multiple_choice" | "short_answer" | "long_answer";
+  title: string;
+  options: string[];
+  required: boolean;
+  questionOrder: number;
+}
+
 interface Survey {
   id: string;
   title: string;
   items: SurveyItem[];
   setSize: number;
+  userId: string;
+  questions: Question[];
 }
 
 interface Response {
@@ -66,6 +77,24 @@ interface MatrixData {
   y: number;
 }
 
+interface AdminUser {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  image: string;
+  createdAt: string;
+}
+
+interface GeneralResponseRow {
+  questionId: string;
+  respondentId: string;
+  answer: string;
+  title: string;
+  type: string;
+  options: string[];
+}
+
 export default function DashboardPage() {
   const params = useParams();
   const surveyId = params.id as string;
@@ -79,12 +108,34 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("chart");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 공동 관리자
+  const [currentUserId, setCurrentUserId] = useState("");
+  const [isOwner, setIsOwner] = useState(false);
+  const [admins, setAdmins] = useState<AdminUser[]>([]);
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminError, setAdminError] = useState("");
+  const [adminLoading, setAdminLoading] = useState(false);
+
+  // 일반 문항 응답
+  const [generalResponses, setGeneralResponses] = useState<GeneralResponseRow[]>([]);
+
+  useEffect(() => {
+    // 현재 로그인 유저 정보 가져오기
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((session) => {
+        if (session?.user?.id) setCurrentUserId(session.user.id);
+      })
+      .catch(() => {});
+  }, []);
+
   useEffect(() => {
     Promise.all([
       fetch(`/api/surveys/${surveyId}`).then((r) => r.json()),
       fetch(`/api/surveys/${surveyId}/responses`).then((r) => r.json()),
+      fetch(`/api/surveys/${surveyId}/general-responses`).then((r) => r.json()),
     ])
-      .then(([surveyData, responses]) => {
+      .then(([surveyData, responses, genResponses]) => {
         if (surveyData.error) {
           setError(surveyData.error);
           return;
@@ -98,9 +149,27 @@ export default function DashboardPage() {
 
         const calculated = calculateScores(surveyData.items, responses);
         setScores(calculated);
+
+        if (!genResponses.error) {
+          setGeneralResponses(genResponses);
+        }
       })
       .catch(() => setError("데이터를 불러올 수 없습니다."));
   }, [surveyId]);
+
+  useEffect(() => {
+    if (!survey || !currentUserId) return;
+    const ownerCheck = survey.userId === currentUserId;
+    setIsOwner(ownerCheck);
+    if (ownerCheck) {
+      fetch(`/api/surveys/${surveyId}/admins`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data.error) setAdmins(data);
+        })
+        .catch(() => {});
+    }
+  }, [survey, currentUserId, surveyId]);
 
   function calculateScores(
     items: SurveyItem[],
@@ -191,6 +260,44 @@ export default function DashboardPage() {
     reader.readAsText(file);
   };
 
+  const addAdmin = async () => {
+    if (!adminEmail.trim()) return;
+    setAdminLoading(true);
+    setAdminError("");
+    try {
+      const res = await fetch(`/api/surveys/${surveyId}/admins`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: adminEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAdminError(data.error || "추가에 실패했습니다.");
+      } else {
+        setAdminEmail("");
+        // 목록 새로고침
+        const updated = await fetch(`/api/surveys/${surveyId}/admins`).then((r) => r.json());
+        if (!updated.error) setAdmins(updated);
+      }
+    } catch {
+      setAdminError("추가에 실패했습니다.");
+    }
+    setAdminLoading(false);
+  };
+
+  const removeAdmin = async (userId: string) => {
+    try {
+      await fetch(`/api/surveys/${surveyId}/admins`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      setAdmins(admins.filter((a) => a.userId !== userId));
+    } catch {
+      // ignore
+    }
+  };
+
   const surveyUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}/survey/${surveyId}`
@@ -200,6 +307,35 @@ export default function DashboardPage() {
     navigator.clipboard.writeText(surveyUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  // 일반 문항별 응답 집계
+  const getQuestionStats = (question: Question) => {
+    const qResponses = generalResponses.filter(
+      (r) => r.questionId === question.id
+    );
+    if (question.type === "multiple_choice") {
+      const counts: Record<string, number> = {};
+      question.options.forEach((opt) => (counts[opt] = 0));
+      qResponses.forEach((r) => {
+        try {
+          const ans = JSON.parse(r.answer);
+          if (Array.isArray(ans)) {
+            ans.forEach((a) => { if (a in counts) counts[a]++; });
+          } else if (typeof ans === "string" && ans in counts) {
+            counts[ans]++;
+          }
+        } catch {
+          if (r.answer in counts) counts[r.answer]++;
+        }
+      });
+      const total = qResponses.length;
+      return { type: "multiple_choice" as const, counts, total };
+    }
+    return {
+      type: question.type as "short_answer" | "long_answer",
+      answers: qResponses.map((r) => r.answer),
+    };
   };
 
   if (error) {
@@ -217,6 +353,8 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  const hasQuestions = survey.questions && survey.questions.length > 0;
 
   const COLORS = [
     "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6",
@@ -255,6 +393,9 @@ export default function DashboardPage() {
             <TabsTrigger value="chart" className="text-base px-0">MaxDiff 점수</TabsTrigger>
             <TabsTrigger value="table" className="text-base px-0">상세 테이블</TabsTrigger>
             <TabsTrigger value="matrix" className="text-base px-0">Matrix 분석</TabsTrigger>
+            {hasQuestions && (
+              <TabsTrigger value="general" className="text-base px-0">일반 문항</TabsTrigger>
+            )}
           </TabsList>
           {activeTab === "table" && (
             <Button
@@ -509,7 +650,151 @@ export default function DashboardPage() {
                 </div>
               )}
         </TabsContent>
+
+        {/* 일반 문항 탭 */}
+        {hasQuestions && (
+          <TabsContent value="general">
+            <div className="space-y-6">
+              {survey.questions.map((q) => {
+                const stats = getQuestionStats(q);
+                return (
+                  <Card key={q.id} className="py-0">
+                    <CardHeader className="pb-3 pt-4 px-5">
+                      <div className="flex items-start gap-2">
+                        <Badge variant="secondary" className="text-xs shrink-0 mt-0.5">
+                          {q.type === "multiple_choice" ? "객관식" : q.type === "short_answer" ? "단답형" : "장문형"}
+                        </Badge>
+                        <CardTitle className="text-sm font-medium text-foreground leading-snug">
+                          {q.title || "(제목 없음)"}
+                        </CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="px-5 pb-5">
+                      {stats.type === "multiple_choice" ? (
+                        <div className="space-y-2">
+                          {Object.entries(stats.counts).map(([opt, count]) => {
+                            const pct = stats.total > 0 ? Math.round((count / stats.total) * 100) : 0;
+                            return (
+                              <div key={opt} className="flex items-center gap-3">
+                                <span className="text-sm text-foreground w-28 shrink-0 truncate">{opt}</span>
+                                <div className="flex-1 bg-muted rounded-full h-2 overflow-hidden">
+                                  <div
+                                    className="bg-primary h-2 rounded-full transition-all"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className="text-xs text-muted-foreground w-16 text-right shrink-0">
+                                  {count}명 ({pct}%)
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {stats.total === 0 && (
+                            <p className="text-sm text-muted-foreground">아직 응답이 없습니다.</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {stats.answers.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">아직 응답이 없습니다.</p>
+                          ) : (
+                            stats.answers.map((ans, i) => (
+                              <div
+                                key={i}
+                                className="text-sm text-foreground bg-muted rounded-lg px-3 py-2"
+                              >
+                                {ans}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </TabsContent>
+        )}
       </Tabs>
+
+      {/* 공동 관리자 관리 섹션 (소유자에게만 표시) */}
+      {isOwner && (
+        <Card className="mt-8 py-0">
+          <CardHeader className="pb-3 pt-5 px-5">
+            <CardTitle className="text-base font-semibold">공동 관리자</CardTitle>
+          </CardHeader>
+          <CardContent className="px-5 pb-5 space-y-4">
+            {/* 추가 폼 */}
+            <form
+              className="flex gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                addAdmin();
+              }}
+            >
+              <Input
+                type="email"
+                value={adminEmail}
+                onChange={(e) => setAdminEmail(e.target.value)}
+                placeholder="초대할 이메일 주소"
+                className="flex-1 h-9 px-3"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                className="h-9 px-3.5"
+                disabled={adminLoading || !adminEmail.trim()}
+              >
+                {adminLoading ? "추가 중..." : "추가"}
+              </Button>
+            </form>
+            {adminError && (
+              <p className="text-sm text-red-500">{adminError}</p>
+            )}
+
+            {/* 공동 관리자 목록 */}
+            {admins.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                공동 관리자가 없습니다. 이메일로 추가해주세요.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {admins.map((admin) => (
+                  <div
+                    key={admin.userId}
+                    className="flex items-center gap-3 rounded-lg border border-border px-3 py-2"
+                  >
+                    {admin.image ? (
+                      <img
+                        src={admin.image}
+                        alt={admin.name}
+                        className="w-8 h-8 rounded-full object-cover shrink-0"
+                      />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 text-xs font-medium text-muted-foreground">
+                        {admin.name?.[0] || "?"}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{admin.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{admin.email}</p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => removeAdmin(admin.userId)}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

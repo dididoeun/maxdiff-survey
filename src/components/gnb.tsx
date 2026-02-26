@@ -17,15 +17,27 @@ export function GNB() {
           <img src="/book.svg" alt="홈" className="h-5 w-5" />
         </Link>
         <nav className="ml-4 flex items-center gap-1">
-          <Link
-            href="/admin"
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "sm" }),
-              pathname === "/admin" ? "text-foreground" : "text-muted-foreground"
-            )}
-          >
-            설문 생성
-          </Link>
+          {status !== "loading" && !session?.user ? (
+            <button
+              onClick={() => signIn("google", { callbackUrl: "/admin" })}
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "text-muted-foreground"
+              )}
+            >
+              설문 생성
+            </button>
+          ) : (
+            <Link
+              href="/admin"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                pathname === "/admin" ? "text-foreground" : "text-muted-foreground"
+              )}
+            >
+              설문 생성
+            </Link>
+          )}
           <Link
             href="/dashboards"
             className={cn(
@@ -59,7 +71,7 @@ export function GNB() {
             </button>
           ) : (
             <button
-              onClick={() => signIn("google")}
+              onClick={() => signIn("google", { callbackUrl: "/dashboards" })}
               className={cn(
                 buttonVariants({ variant: "ghost", size: "sm" }),
                 "text-muted-foreground"

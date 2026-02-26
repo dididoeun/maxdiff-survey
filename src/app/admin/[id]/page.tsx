@@ -25,6 +25,7 @@ export default function EditSurveyPage() {
           setSize: data.setSize,
           jobRoles: data.jobRoles,
           status: data.status,
+          questions: data.questions || [],
         });
       })
       .catch(() => setError("설문을 불러올 수 없습니다."));

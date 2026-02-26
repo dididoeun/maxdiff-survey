@@ -10,33 +10,31 @@ export async function POST(
     await initDb();
     const { id: surveyId } = await params;
     const body = await req.json();
-    const { respondentId, jobRole, round, setBatch, bestItem, worstItem } = body;
+    const { respondentId, answers } = body;
 
-    if (!respondentId || round === undefined || !setBatch || !bestItem || !worstItem) {
+    if (!respondentId || !Array.isArray(answers)) {
       return NextResponse.json(
-        { error: "모든 필드를 입력해주세요." },
-        { status: 400 }
-      );
-    }
-
-    if (bestItem === worstItem) {
-      return NextResponse.json(
-        { error: "Best와 Worst에 같은 항목을 선택할 수 없습니다." },
+        { error: "respondentId와 answers가 필요합니다." },
         { status: 400 }
       );
     }
 
     const db = getDb();
-    await db.execute({
-      sql: "INSERT INTO responses (surveyId, respondentId, jobRole, round, setBatch, bestItem, worstItem) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      args: [surveyId, respondentId, jobRole || "", round, JSON.stringify(setBatch), bestItem, worstItem],
-    });
+    for (const a of answers) {
+      const answer = Array.isArray(a.answer)
+        ? JSON.stringify(a.answer)
+        : String(a.answer ?? "");
+      await db.execute({
+        sql: "INSERT INTO general_responses (surveyId, questionId, respondentId, answer) VALUES (?, ?, ?, ?)",
+        args: [surveyId, a.questionId, respondentId, answer],
+      });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
-      { error: "응답 저장에 실패했습니다." },
+      { error: "일반 문항 응답 저장에 실패했습니다." },
       { status: 500 }
     );
   }
@@ -62,20 +60,25 @@ export async function GET(
 
     const db = getDb();
     const result = await db.execute({
-      sql: "SELECT * FROM responses WHERE surveyId = ? ORDER BY createdAt",
+      sql: `SELECT gr.id, gr.questionId, gr.respondentId, gr.answer, gr.createdAt,
+                   q.title, q.type, q.options
+            FROM general_responses gr
+            JOIN questions q ON gr.questionId = q.id
+            WHERE gr.surveyId = ?
+            ORDER BY q.questionOrder, gr.respondentId`,
       args: [surveyId],
     });
 
     return NextResponse.json(
       result.rows.map((r) => ({
         ...r,
-        setBatch: JSON.parse(r.setBatch as string),
+        options: JSON.parse((r.options as string) || "[]"),
       }))
     );
   } catch (error) {
     console.error(error);
     return NextResponse.json(
-      { error: "응답 조회에 실패했습니다." },
+      { error: "일반 문항 응답 조회에 실패했습니다." },
       { status: 500 }
     );
   }
