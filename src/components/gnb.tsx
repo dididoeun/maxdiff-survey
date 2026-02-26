@@ -10,6 +10,8 @@ export function GNB() {
   const pathname = usePathname();
   const { data: session, status } = useSession();
 
+  if (pathname.startsWith("/survey/")) return null;
+
   return (
     <header className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="max-w-3xl mx-auto flex h-12 items-center px-4">

@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
 
@@ -14,11 +13,38 @@ interface SurveyItem {
 
 interface Question {
   id: string;
-  type: "multiple_choice" | "short_answer" | "long_answer";
+  type: "multiple_choice" | "short_answer" | "long_answer" | "section";
   title: string;
   options: string[];
   required: boolean;
   questionOrder: number;
+}
+
+interface SectionGroup {
+  sectionTitle: string | null;
+  questions: Question[];
+}
+
+function groupBySections(questions: Question[]): SectionGroup[] {
+  const groups: SectionGroup[] = [];
+  let currentTitle: string | null = null;
+  let currentQuestions: Question[] = [];
+
+  for (const q of questions) {
+    if (q.type === "section") {
+      if (currentQuestions.length > 0) {
+        groups.push({ sectionTitle: currentTitle, questions: currentQuestions });
+      }
+      currentTitle = q.title || null;
+      currentQuestions = [];
+    } else {
+      currentQuestions.push(q);
+    }
+  }
+  if (currentQuestions.length > 0 || groups.length === 0) {
+    groups.push({ sectionTitle: currentTitle, questions: currentQuestions });
+  }
+  return groups;
 }
 
 interface Survey {
@@ -54,6 +80,7 @@ export default function SurveyPage() {
     { questionId: string; answer: string | string[] }[]
   >([]);
   const [generalError, setGeneralError] = useState("");
+  const [currentSectionIdx, setCurrentSectionIdx] = useState(0);
 
   const generateSets = useCallback(
     (items: SurveyItem[], setSize: number): SurveyItem[][] => {
@@ -280,86 +307,124 @@ export default function SurveyPage() {
     );
   }
 
-  // 일반 문항 응답 화면
+  // 일반 문항 응답 화면 (섹션별)
   if (stage === "general" && survey.questions?.length > 0) {
+    const sections = groupBySections(survey.questions);
+    const section = sections[currentSectionIdx];
+    const isLastSection = currentSectionIdx === sections.length - 1;
+
+    const handleNextSection = async () => {
+      // 현재 섹션 필수 문항 검증
+      for (const q of section.questions) {
+        if (!q.required) continue;
+        const ans = generalAnswers.find((a) => a.questionId === q.id);
+        const isEmpty = !ans || (Array.isArray(ans.answer) ? ans.answer.length === 0 : String(ans.answer).trim() === "");
+        if (isEmpty) {
+          setGeneralError(`"${q.title || "문항"}"은 필수 입력입니다.`);
+          return;
+        }
+      }
+      setGeneralError("");
+
+      if (!isLastSection) {
+        setCurrentSectionIdx((i) => i + 1);
+        return;
+      }
+      await submitGeneralAnswers();
+    };
+
     return (
       <div className="max-w-lg mx-auto px-4 py-12">
         <h2 className="text-xl font-bold text-foreground mb-1">{survey.title}</h2>
-        <p className="text-sm text-muted-foreground mb-6">사전 질문에 답해주세요.</p>
+        {section.sectionTitle && (
+          <p className="text-base font-semibold text-foreground mt-4 mb-1">{section.sectionTitle}</p>
+        )}
+        {sections.length > 1 && (
+          <p className="text-xs text-muted-foreground mb-6">
+            {currentSectionIdx + 1} / {sections.length}
+          </p>
+        )}
+        {!section.sectionTitle && sections.length <= 1 && (
+          <p className="text-sm text-muted-foreground mb-6">사전 질문에 답해주세요.</p>
+        )}
 
-        <div className="space-y-6">
-          {survey.questions.map((q) => {
+        <div className="space-y-8">
+          {section.questions.map((q) => {
             const ans = generalAnswers.find((a) => a.questionId === q.id);
             return (
-              <Card key={q.id} className="border-border">
-                <CardContent className="p-4 space-y-3">
-                  <p className="text-sm font-medium text-foreground">
-                    {q.title}
-                    {q.required && <span className="text-red-500 ml-0.5">*</span>}
-                  </p>
+              <div key={q.id} className="space-y-3">
+                <p className="text-sm font-medium text-foreground">
+                  {q.title}
+                  {q.required && <span className="text-red-500 ml-0.5">*</span>}
+                </p>
 
-                  {q.type === "multiple_choice" && (
-                    <div className="space-y-2">
-                      {q.options.map((opt, i) => (
-                        <label
-                          key={i}
-                          className="flex items-center gap-2 cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-muted transition-colors has-[:checked]:border-primary/30 has-[:checked]:bg-primary/5"
-                        >
-                          <input
-                            type="radio"
-                            name={`q-${q.id}`}
-                            value={opt}
-                            checked={
-                              Array.isArray(ans?.answer)
-                                ? ans.answer.includes(opt)
-                                : ans?.answer === opt
-                            }
-                            onChange={() => handleGeneralAnswer(q.id, opt)}
-                            className="size-4 accent-primary shrink-0"
-                          />
-                          <span className="text-sm text-foreground">{opt}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
+                {q.type === "multiple_choice" && (
+                  <div className="space-y-2">
+                    {q.options.map((opt, i) => (
+                      <label
+                        key={i}
+                        className="flex items-center gap-2 cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-muted transition-colors has-[:checked]:border-primary/30 has-[:checked]:bg-primary/5"
+                      >
+                        <input
+                          type="radio"
+                          name={`q-${q.id}`}
+                          value={opt}
+                          checked={Array.isArray(ans?.answer) ? ans.answer.includes(opt) : ans?.answer === opt}
+                          onChange={() => handleGeneralAnswer(q.id, opt)}
+                          className="size-4 accent-primary shrink-0"
+                        />
+                        <span className="text-sm text-foreground">{opt}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
 
-                  {q.type === "short_answer" && (
-                    <input
-                      type="text"
-                      value={typeof ans?.answer === "string" ? ans.answer : ""}
-                      onChange={(e) => handleGeneralAnswer(q.id, e.target.value)}
-                      placeholder="답변을 입력하세요"
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                    />
-                  )}
+                {q.type === "short_answer" && (
+                  <input
+                    type="text"
+                    value={typeof ans?.answer === "string" ? ans.answer : ""}
+                    onChange={(e) => handleGeneralAnswer(q.id, e.target.value)}
+                    placeholder="답변을 입력하세요"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                )}
 
-                  {q.type === "long_answer" && (
-                    <textarea
-                      value={typeof ans?.answer === "string" ? ans.answer : ""}
-                      onChange={(e) => handleGeneralAnswer(q.id, e.target.value)}
-                      placeholder="답변을 입력하세요"
-                      rows={4}
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-                    />
-                  )}
-                </CardContent>
-              </Card>
+                {q.type === "long_answer" && (
+                  <textarea
+                    value={typeof ans?.answer === "string" ? ans.answer : ""}
+                    onChange={(e) => handleGeneralAnswer(q.id, e.target.value)}
+                    placeholder="답변을 입력하세요"
+                    rows={4}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                  />
+                )}
+              </div>
             );
           })}
         </div>
 
-        {generalError && (
-          <p className="mt-3 text-sm text-red-500">{generalError}</p>
-        )}
+        {generalError && <p className="mt-3 text-sm text-red-500">{generalError}</p>}
 
-        <Button
-          onClick={submitGeneralAnswers}
-          disabled={submitting}
-          className="w-full h-10 mt-6"
-          size="lg"
-        >
-          {submitting ? "저장 중..." : "다음"}
-        </Button>
+        <div className="flex gap-2 mt-6">
+          {currentSectionIdx > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => { setGeneralError(""); setCurrentSectionIdx((i) => i - 1); }}
+              className="h-10"
+              size="lg"
+            >
+              이전
+            </Button>
+          )}
+          <Button
+            onClick={handleNextSection}
+            disabled={submitting}
+            className="flex-1 h-10"
+            size="lg"
+          >
+            {submitting ? "저장 중..." : isLastSection ? "다음" : "다음"}
+          </Button>
+        </div>
       </div>
     );
   }

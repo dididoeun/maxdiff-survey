@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, ThumbsUp, CircleCheck, Equal, AlignJustify, ChevronDown, GripVertical } from "lucide-react";
+import { ThumbsUp, CircleCheck, Equal, AlignJustify, ChevronDown, GripVertical, SeparatorHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -58,11 +58,18 @@ interface GeneralBlock {
   order: number;
 }
 
-type Block = MaxDiffBlock | GeneralBlock;
+interface SectionBlock {
+  id: string;
+  type: "section";
+  title: string;
+  order: number;
+}
+
+type Block = MaxDiffBlock | GeneralBlock | SectionBlock;
 
 export interface Question {
   id: string;
-  type: "multiple_choice" | "short_answer" | "long_answer";
+  type: "multiple_choice" | "short_answer" | "long_answer" | "section";
   title: string;
   options: string[];
   required: boolean;
@@ -91,6 +98,7 @@ const BLOCK_TYPE_LABELS: Record<Block["type"], string> = {
   multiple_choice: "객관식",
   short_answer: "단답형",
   long_answer: "장문형",
+  section: "섹션",
 };
 
 const BLOCK_TYPE_ICONS: Record<Block["type"], React.ReactNode> = {
@@ -98,9 +106,11 @@ const BLOCK_TYPE_ICONS: Record<Block["type"], React.ReactNode> = {
   multiple_choice: <CircleCheck className="size-4" />,
   short_answer:    <Equal className="size-4" />,
   long_answer:     <AlignJustify className="size-4" />,
+  section:         <SeparatorHorizontal className="size-4" />,
 };
 
-const ADD_OPTIONS: Block["type"][] = [
+// 문항 추가 드롭다운 (섹션 제외)
+const ADD_OPTIONS: Exclude<Block["type"], "section">[] = [
   "maxdiff",
   "multiple_choice",
   "short_answer",
@@ -112,6 +122,9 @@ const ADD_OPTIONS: Block["type"][] = [
 function createBlock(type: Block["type"], order: number): Block {
   if (type === "maxdiff") {
     return { id: crypto.randomUUID(), type: "maxdiff", items: [], setSize: 4, order };
+  }
+  if (type === "section") {
+    return { id: crypto.randomUUID(), type: "section", title: "", order };
   }
   return {
     id: crypto.randomUUID(),
@@ -135,17 +148,21 @@ function initBlocks(initialData?: SurveyFormData): Block[] {
       order: 0,
     });
   }
-  // 일반 문항 블록
+  // 일반 문항 / 섹션 블록
   if (initialData?.questions) {
     initialData.questions.forEach((q, i) => {
-      blocks.push({
-        id: q.id || crypto.randomUUID(),
-        type: q.type,
-        title: q.title,
-        options: q.options || [],
-        required: q.required ?? true,
-        order: blocks.length + i,
-      });
+      if (q.type === "section") {
+        blocks.push({ id: q.id || crypto.randomUUID(), type: "section", title: q.title, order: blocks.length + i });
+      } else {
+        blocks.push({
+          id: q.id || crypto.randomUUID(),
+          type: q.type,
+          title: q.title,
+          options: q.options || [],
+          required: q.required ?? true,
+          order: blocks.length + i,
+        });
+      }
     });
   }
   return blocks;
@@ -214,12 +231,17 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         if (type === "maxdiff") {
           return { id: b.id, type: "maxdiff", items: [], setSize: 4, order: b.order };
         }
+        if (type === "section") {
+          return { id: b.id, type: "section", title: b.type !== "maxdiff" ? b.title : "", order: b.order };
+        }
+        const prevTitle = b.type !== "maxdiff" ? b.title : "";
+        const prevRequired = b.type !== "maxdiff" && b.type !== "section" ? b.required : true;
         return {
           id: b.id,
           type,
-          title: b.type !== "maxdiff" ? b.title : "",
+          title: prevTitle,
           options: type === "multiple_choice" ? ["", ""] : [],
-          required: b.type !== "maxdiff" ? b.required : true,
+          required: prevRequired,
           order: b.order,
         };
       })
@@ -276,7 +298,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
   const addOption = (blockId: string) => {
     setBlocks((prev) =>
       prev.map((b) =>
-        b.id === blockId && b.type !== "maxdiff"
+        b.id === blockId && b.type !== "maxdiff" && b.type !== "section"
           ? { ...b, options: [...b.options, ""] }
           : b
       )
@@ -286,8 +308,8 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
   const updateOption = (blockId: string, idx: number, value: string) => {
     setBlocks((prev) =>
       prev.map((b) =>
-        b.id === blockId && b.type !== "maxdiff"
-          ? { ...b, options: b.options.map((o, i) => (i === idx ? value : o)) }
+        b.id === blockId && b.type !== "maxdiff" && b.type !== "section"
+          ? { ...b, options: b.options.map((o: string, i: number) => (i === idx ? value : o)) }
           : b
       )
     );
@@ -296,8 +318,8 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
   const removeOption = (blockId: string, idx: number) => {
     setBlocks((prev) =>
       prev.map((b) =>
-        b.id === blockId && b.type !== "maxdiff" && b.options.length > 2
-          ? { ...b, options: b.options.filter((_, i) => i !== idx) }
+        b.id === blockId && b.type !== "maxdiff" && b.type !== "section" && b.options.length > 2
+          ? { ...b, options: b.options.filter((_: string, i: number) => i !== idx) }
           : b
       )
     );
@@ -317,8 +339,13 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
     }
 
     const questions: Question[] = blocks
-      .filter((b): b is GeneralBlock => b.type !== "maxdiff")
-      .map((b, i) => ({ ...b, order: i }));
+      .filter((b): b is GeneralBlock | SectionBlock => b.type !== "maxdiff")
+      .map((b, i) => {
+        if (b.type === "section") {
+          return { id: b.id, type: "section" as const, title: b.title, options: [], required: false, order: i };
+        }
+        return { ...b, order: i };
+      });
 
     setSavingType(status);
     try {
@@ -396,11 +423,33 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
   // ── 폼 ────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-12">
-      <h1 className="text-2xl font-bold text-foreground mb-8">
-        {mode === "edit" ? "설문 수정하기" : "새 설문 만들기"}
-      </h1>
+    <>
+      {/* Sticky 타이틀 바 */}
+      <div className="sticky top-12 z-40 w-full bg-white border-b border-border pb-2">
+        <div className="max-w-3xl mx-auto px-4 h-12 flex items-center justify-between">
+          <h1 className="text-base font-semibold text-foreground">
+            {mode === "edit" ? "설문 수정하기" : "새 설문 만들기"}
+          </h1>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => submitSurvey("draft")}
+              disabled={savingType !== null}
+            >
+              {savingType === "draft" ? "저장 중..." : "임시저장"}
+            </Button>
+            <Button
+              onClick={() => submitSurvey("published")}
+              disabled={savingType !== null}
+            >
+              {savingType === "published" ? "저장 중..." : "설문 생성하기"}
+            </Button>
+          </div>
+        </div>
+      </div>
 
+    <div className="min-h-screen bg-[#F7F7F8]">
+    <div className="max-w-3xl mx-auto px-4 py-8">
       {/* 설문 제목 */}
       <div className="mb-8">
         <Label htmlFor="title">설문 제목</Label>
@@ -443,16 +492,24 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         </DndContext>
       )}
 
-      {/* 문항 추가하기 드롭다운 */}
-      <div className="mb-10">
+      {/* 문항/섹션 추가 */}
+      <div className="flex gap-2 mb-10 justify-center">
+        <Button
+          type="button"
+          variant="ghost"
+          size="lg"
+          onClick={() => addBlock("section")}
+          className="whitespace-nowrap hover:bg-neutral-200"
+        >
+          섹션 추가
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
-              buttonVariants({ variant: "outline", size: "lg" }),
-              "w-full gap-2"
+              buttonVariants({ variant: "ghost", size: "lg" }),
+              "hover:bg-neutral-200"
             )}
           >
-            <Plus className="size-4" />
             문항 추가하기
           </DropdownMenuTrigger>
           <DropdownMenuContent>
@@ -470,27 +527,9 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         </DropdownMenu>
       </div>
 
-      {/* 저장 버튼 */}
-      <div className="flex gap-3">
-        <Button
-          variant="secondary"
-          onClick={() => submitSurvey("draft")}
-          disabled={savingType !== null}
-          className="h-10 px-3.5"
-          size="lg"
-        >
-          {savingType === "draft" ? "저장 중..." : "임시저장"}
-        </Button>
-        <Button
-          onClick={() => submitSurvey("published")}
-          disabled={savingType !== null}
-          className="flex-1 h-10"
-          size="lg"
-        >
-          {savingType === "published" ? "저장 중..." : "설문 생성하기"}
-        </Button>
-      </div>
     </div>
+    </div>
+    </>
   );
 }
 
@@ -545,6 +584,27 @@ function BlockCard({
   onAddOption, onUpdateOption, onRemoveOption,
 }: BlockCardProps) {
   const [newItemName, setNewItemName] = useState("");
+
+  // ── 섹션 카드 ────────────────────────────────────────────────────────────────
+  if (block.type === "section") {
+    return (
+      <div className="flex items-center gap-3 py-1">
+        <div className="h-px flex-1 bg-border" />
+        <Input
+          value={block.title}
+          onChange={(e) => onUpdate(block.id, { title: e.target.value } as Partial<SectionBlock>)}
+          placeholder="섹션 제목 (선택)"
+          className="w-44 h-7 text-xs text-center px-2"
+        />
+        <div className="h-px flex-1 bg-border" />
+        <Button
+          type="button" variant="ghost" size="icon"
+          className="h-7 w-7 hover:text-destructive text-muted-foreground shrink-0"
+          onClick={() => onRemove(block.id)}
+        >×</Button>
+      </div>
+    );
+  }
 
   return (
     <Card className="border-border">
