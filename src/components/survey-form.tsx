@@ -6,8 +6,8 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ThumbsUp, CircleCheck, Equal, AlignJustify, ChevronDown, GripVertical, SeparatorHorizontal } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { ThumbsUp, CircleCheck, Equal, AlignJustify, ChevronDown, ChevronUp, GripVertical, SeparatorHorizontal, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -15,6 +15,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from "@/components/ui/select";
 import {
   DndContext,
   closestCenter,
@@ -44,6 +50,7 @@ interface ItemInput {
 interface MaxDiffBlock {
   id: string;
   type: "maxdiff";
+  title: string;
   items: ItemInput[];
   setSize: number;
   order: number;
@@ -121,7 +128,7 @@ const ADD_OPTIONS: Exclude<Block["type"], "section">[] = [
 
 function createBlock(type: Block["type"], order: number): Block {
   if (type === "maxdiff") {
-    return { id: crypto.randomUUID(), type: "maxdiff", items: [], setSize: 4, order };
+    return { id: crypto.randomUUID(), type: "maxdiff", title: "", items: [], setSize: 4, order };
   }
   if (type === "section") {
     return { id: crypto.randomUUID(), type: "section", title: "", order };
@@ -138,11 +145,19 @@ function createBlock(type: Block["type"], order: number): Block {
 
 function initBlocks(initialData?: SurveyFormData): Block[] {
   const blocks: Block[] = [];
+
+  // 생성 모드(초기 데이터 없음): 기본 객관식 문항 1개 추가
+  if (!initialData) {
+    blocks.push(createBlock("multiple_choice", 0));
+    return blocks;
+  }
+
   // MaxDiff 블록 (초기 데이터에 items가 있으면 복원)
   if (initialData && initialData.items.length > 0) {
     blocks.push({
       id: crypto.randomUUID(),
       type: "maxdiff",
+      title: "",
       items: initialData.items.map((i) => ({ id: crypto.randomUUID(), ...i })),
       setSize: initialData.setSize || 4,
       order: 0,
@@ -175,6 +190,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
   const [title, setTitle] = useState(initialData?.title || "");
   const [blocks, setBlocks] = useState<Block[]>(() => initBlocks(initialData));
   const [uploading, setUploading] = useState<string | null>(null); // blockId
+  const [focusedId, setFocusedId] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [savingType, setSavingType] = useState<"draft" | "published" | null>(null);
   const [copied, setCopied] = useState(false);
@@ -229,7 +245,8 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
       prev.map((b) => {
         if (b.id !== id) return b;
         if (type === "maxdiff") {
-          return { id: b.id, type: "maxdiff", items: [], setSize: 4, order: b.order };
+          const prevTitle = b.type !== "maxdiff" ? b.title : b.title;
+          return { id: b.id, type: "maxdiff", title: prevTitle, items: [], setSize: 4, order: b.order };
         }
         if (type === "section") {
           return { id: b.id, type: "section", title: b.type !== "maxdiff" ? b.title : "", order: b.order };
@@ -448,18 +465,17 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         </div>
       </div>
 
-    <div className="min-h-screen bg-[#F7F7F8]">
+    <div className="min-h-screen bg-white">
     <div className="max-w-3xl mx-auto px-4 py-8">
       {/* 설문 제목 */}
       <div className="mb-8">
-        <Label htmlFor="title">설문 제목</Label>
         <Input
           id="title"
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="예: WDS 컴포넌트 개선 시급도 조사"
-          className="mt-2 h-10 px-3.5"
+          placeholder="설문 제목을 입력해 주세요."
+          className="h-10 px-3.5"
         />
       </div>
 
@@ -468,25 +484,34 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-4 mb-6">
-              {blocks.map((block, idx) => (
-                <SortableBlockCard
-                  key={block.id}
-                  block={block}
-                  idx={idx}
-                  totalBlocks={blocks.length}
-                  uploading={uploading}
-                  onMove={moveBlock}
-                  onRemove={removeBlock}
-                  onUpdate={updateBlock}
-                  onChangeType={changeBlockType}
-                  onAddItem={addItem}
-                  onRemoveItem={removeItem}
-                  onImageUpload={handleImageUpload}
-                  onAddOption={addOption}
-                  onUpdateOption={updateOption}
-                  onRemoveOption={removeOption}
-                />
-              ))}
+              {(() => {
+                let sectionCount = 0;
+                return blocks.map((block, idx) => {
+                  if (block.type === "section") sectionCount++;
+                  return (
+                    <SortableBlockCard
+                      key={block.id}
+                      block={block}
+                      idx={idx}
+                      totalBlocks={blocks.length}
+                      uploading={uploading}
+                      isFocused={focusedId === block.id}
+                      onFocus={setFocusedId}
+                      sectionNumber={block.type === "section" ? sectionCount : undefined}
+                      onMove={moveBlock}
+                      onRemove={removeBlock}
+                      onUpdate={updateBlock}
+                      onChangeType={changeBlockType}
+                      onAddItem={addItem}
+                      onRemoveItem={removeItem}
+                      onImageUpload={handleImageUpload}
+                      onAddOption={addOption}
+                      onUpdateOption={updateOption}
+                      onRemoveOption={removeOption}
+                    />
+                  );
+                });
+              })()}
             </div>
           </SortableContext>
         </DndContext>
@@ -503,6 +528,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         >
           섹션 추가
         </Button>
+        <div className="w-px h-3.5 bg-border self-center" />
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
@@ -510,7 +536,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
               "hover:bg-neutral-200"
             )}
           >
-            문항 추가하기
+            문항 추가
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             {ADD_OPTIONS.map((type) => (
@@ -536,8 +562,9 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
 // ── Sortable 래퍼 ─────────────────────────────────────────────────────────────
 
 function SortableBlockCard(props: BlockCardProps) {
+  const isSection = props.block.type === "section";
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: props.block.id });
+    useSortable({ id: props.block.id, disabled: isSection });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -546,13 +573,15 @@ function SortableBlockCard(props: BlockCardProps) {
 
   return (
     <div ref={setNodeRef} style={style} className={cn("group/sortable relative", isDragging && "opacity-50")}>
-      <div
-        className="absolute -left-6 top-3 opacity-0 group-hover/sortable:opacity-100 transition-opacity cursor-grab active:cursor-grabbing touch-none"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-4 text-muted-foreground" />
-      </div>
+      {!isSection && (
+        <div
+          className="absolute -left-6 top-3 opacity-0 group-hover/sortable:opacity-100 transition-opacity cursor-grab active:cursor-grabbing touch-none"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-4 text-muted-foreground" />
+        </div>
+      )}
       <BlockCard {...props} />
     </div>
   );
@@ -565,6 +594,9 @@ interface BlockCardProps {
   idx: number;
   totalBlocks: number;
   uploading: string | null;
+  isFocused: boolean;
+  onFocus: (id: string) => void;
+  sectionNumber?: number;
   onMove: (id: string, dir: "up" | "down") => void;
   onRemove: (id: string) => void;
   onUpdate: (id: string, patch: Partial<Block>) => void;
@@ -577,8 +609,39 @@ interface BlockCardProps {
   onRemoveOption: (blockId: string, idx: number) => void;
 }
 
+function SectionTitleButton({
+  block, sectionNumber, onUpdate,
+}: { block: SectionBlock; sectionNumber: number; onUpdate: (id: string, patch: Partial<Block>) => void }) {
+  const [editing, setEditing] = useState(false);
+  const displayText = block.title.trim() || `Section ${sectionNumber}`;
+
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        value={block.title}
+        onChange={(e) => onUpdate(block.id, { title: e.target.value } as Partial<SectionBlock>)}
+        onBlur={() => setEditing(false)}
+        onKeyDown={(e) => { if (e.key === "Enter") setEditing(false); }}
+        placeholder={`Section ${sectionNumber}`}
+        className="w-28 h-6 text-xs text-center bg-transparent border-b border-border outline-none px-1 text-foreground"
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="text-xs text-muted-foreground font-medium whitespace-nowrap hover:text-foreground transition-colors px-2 shrink-0"
+    >
+      {displayText}
+    </button>
+  );
+}
+
 function BlockCard({
   block, idx, totalBlocks, uploading,
+  isFocused, onFocus, sectionNumber,
   onMove, onRemove, onUpdate, onChangeType,
   onAddItem, onRemoveItem, onImageUpload,
   onAddOption, onUpdateOption, onRemoveOption,
@@ -588,62 +651,58 @@ function BlockCard({
   // ── 섹션 카드 ────────────────────────────────────────────────────────────────
   if (block.type === "section") {
     return (
-      <div className="flex items-center gap-3 py-1">
-        <div className="h-px flex-1 bg-border" />
-        <Input
-          value={block.title}
-          onChange={(e) => onUpdate(block.id, { title: e.target.value } as Partial<SectionBlock>)}
-          placeholder="섹션 제목 (선택)"
-          className="w-44 h-7 text-xs text-center px-2"
-        />
-        <div className="h-px flex-1 bg-border" />
+      <div className="flex items-center gap-2 h-10 w-full overflow-hidden">
+        <div className="h-px bg-border flex-1 min-w-0" />
+        <SectionTitleButton block={block} sectionNumber={sectionNumber ?? 1} onUpdate={onUpdate} />
+        <div className="h-px bg-border flex-1 min-w-0" />
         <Button
           type="button" variant="ghost" size="icon"
           className="h-7 w-7 hover:text-destructive text-muted-foreground shrink-0"
           onClick={() => onRemove(block.id)}
-        >×</Button>
+        ><X className="size-3.5" /></Button>
       </div>
     );
   }
 
   return (
-    <Card className="border-border">
+    <Card
+      className={cn("border-border cursor-pointer transition-colors", isFocused && "border-gray-400 ring-2 ring-gray-300")}
+      onClick={() => onFocus(block.id)}
+    >
       <CardContent className="px-4 py-0 space-y-4">
-        {/* 블록 헤더 */}
+        {/* 문항 제목 + 타입 뱃지 행 */}
         <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className={cn(
-                buttonVariants({ variant: "secondary", size: "sm" }),
-                "h-7 gap-1.5 text-xs px-2"
-              )}
+          <Input
+            value={block.title}
+            onChange={(e) => onUpdate(block.id, { title: e.target.value })}
+            placeholder="문항 제목"
+            className="flex-1 h-10 px-3 text-sm"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <Select
+            value={block.type}
+            onValueChange={(value) => onChangeType(block.id, value as Block["type"])}
+          >
+            <SelectTrigger
+              className="!h-10 w-fit shrink-0 text-sm bg-secondary border-0 shadow-none px-3.5"
+              onClick={(e) => e.stopPropagation()}
             >
-              {BLOCK_TYPE_ICONS[block.type]}
-              {BLOCK_TYPE_LABELS[block.type]}
-              <ChevronDown className="size-3 opacity-60" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
+              <span className="flex items-center gap-1.5">
+                {BLOCK_TYPE_ICONS[block.type]}
+                {BLOCK_TYPE_LABELS[block.type]}
+              </span>
+            </SelectTrigger>
+            <SelectContent className="p-1">
               {ADD_OPTIONS.map((type) => (
-                <DropdownMenuItem
-                  key={type}
-                  onClick={() => onChangeType(block.id, type)}
-                  className="h-8 gap-2 cursor-pointer"
-                >
-                  {BLOCK_TYPE_ICONS[type]}
-                  {BLOCK_TYPE_LABELS[type]}
-                </DropdownMenuItem>
+                <SelectItem key={type} value={type}>
+                  <span className="flex items-center gap-2">
+                    {BLOCK_TYPE_ICONS[type]}
+                    {BLOCK_TYPE_LABELS[type]}
+                  </span>
+                </SelectItem>
               ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <div className="flex-1" />
-          <div className="flex items-center gap-1">
-            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"
-              disabled={idx === 0} onClick={() => onMove(block.id, "up")}>↑</Button>
-            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"
-              disabled={idx === totalBlocks - 1} onClick={() => onMove(block.id, "down")}>↓</Button>
-            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive text-muted-foreground"
-              onClick={() => onRemove(block.id)}>×</Button>
-          </div>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* MaxDiff 블록 */}
@@ -659,6 +718,7 @@ function BlockCard({
                 value={block.setSize}
                 onChange={(e) => onUpdate(block.id, { setSize: Number(e.target.value) } as Partial<MaxDiffBlock>)}
                 className="w-20 h-8 px-2.5 text-sm"
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
 
@@ -676,6 +736,7 @@ function BlockCard({
                 onChange={(e) => setNewItemName(e.target.value)}
                 placeholder="항목 이름 (예: Button)"
                 className="h-9 px-3 text-sm"
+                onClick={(e) => e.stopPropagation()}
               />
               <Button type="submit" variant="outline" className="h-9 px-3 text-sm shrink-0">
                 항목 추가
@@ -711,12 +772,12 @@ function BlockCard({
                     <span className="flex-1 text-sm text-foreground">{item.name}</span>
                     {item.image && (
                       <Button variant="ghost" size="sm" className="h-6 text-xs text-destructive hover:text-destructive px-1"
-                        onClick={() => onUpdate(block.id, { items: block.items.map((i) => i.id === item.id ? { ...i, image: undefined } : i) } as Partial<MaxDiffBlock>)}>
+                        onClick={(e) => { e.stopPropagation(); onUpdate(block.id, { items: block.items.map((i) => i.id === item.id ? { ...i, image: undefined } : i) } as Partial<MaxDiffBlock>); }}>
                         이미지 삭제
                       </Button>
                     )}
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
-                      onClick={() => onRemoveItem(block.id, item.id)}>×</Button>
+                      onClick={(e) => { e.stopPropagation(); onRemoveItem(block.id, item.id); }}>×</Button>
                   </div>
                 ))}
                 <p className="text-xs text-muted-foreground">{block.items.length}개 항목 추가됨</p>
@@ -725,43 +786,46 @@ function BlockCard({
           </div>
         )}
 
-        {/* 일반 문항 블록 */}
-        {block.type !== "maxdiff" && (
-          <div className="space-y-3">
-            <Input
-              value={block.title}
-              onChange={(e) => onUpdate(block.id, { title: e.target.value } as Partial<GeneralBlock>)}
-              placeholder="문항 내용을 입력하세요"
-              className="h-9 px-3 text-sm"
-            />
-
-            {block.type === "multiple_choice" && (
-              <div className="space-y-2 pl-1">
-                {block.options.map((opt, optIdx) => (
-                  <div key={optIdx} className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground w-4 shrink-0">{optIdx + 1}.</span>
-                    <Input
-                      value={opt}
-                      onChange={(e) => onUpdateOption(block.id, optIdx, e.target.value)}
-                      placeholder={`선택지 ${optIdx + 1}`}
-                      className="flex-1 h-8 px-2.5 text-sm"
-                    />
-                    <Button type="button" variant="ghost" size="icon"
-                      className="h-7 w-7 hover:text-destructive text-muted-foreground shrink-0"
-                      onClick={() => onRemoveOption(block.id, optIdx)}
-                      disabled={block.options.length <= 2}>×</Button>
-                  </div>
-                ))}
-                <Button type="button" variant="ghost" size="sm"
-                  className="h-7 text-xs text-muted-foreground pl-6"
-                  onClick={() => onAddOption(block.id)}>
-                  + 선택지 추가
+        {/* 객관식 선택지 */}
+        {block.type === "multiple_choice" && (
+          <div className="space-y-2 pl-1">
+            {block.options.map((opt, optIdx) => (
+              <div key={optIdx} className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground w-4 shrink-0">{optIdx + 1}.</span>
+                <Input
+                  value={opt}
+                  onChange={(e) => onUpdateOption(block.id, optIdx, e.target.value)}
+                  placeholder={`선택지 ${optIdx + 1}`}
+                  className="flex-1 h-8 px-2.5 text-sm"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <Button type="button" variant="ghost" size="icon"
+                  className="h-7 w-7 hover:text-destructive text-muted-foreground shrink-0"
+                  onClick={(e) => { e.stopPropagation(); onRemoveOption(block.id, optIdx); }}
+                  disabled={block.options.length <= 2}>
+                  <X className="size-4" />
                 </Button>
               </div>
-            )}
+            ))}
+            <Button type="button" variant="ghost" size="sm"
+              className="h-7 text-xs text-muted-foreground pl-6"
+              onClick={(e) => { e.stopPropagation(); onAddOption(block.id); }}>
+              + 선택지 추가
+            </Button>
+          </div>
+        )}
 
-            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-muted-foreground">
-              <Checkbox
+      </CardContent>
+
+      {/* 카드 푸터 - 포커스 시에만 표시 */}
+      {isFocused && (
+        <div className="border-t border-border px-4 pt-4 pb-0 flex items-center">
+          {block.type !== "maxdiff" && (
+            <label
+              className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Switch
                 checked={block.required}
                 onCheckedChange={(checked) =>
                   onUpdate(block.id, { required: checked } as Partial<GeneralBlock>)
@@ -769,9 +833,24 @@ function BlockCard({
               />
               필수 문항
             </label>
+          )}
+          <div className="flex-1" />
+          <div className="flex items-center gap-1">
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"
+              disabled={idx === 0} onClick={(e) => { e.stopPropagation(); onMove(block.id, "up"); }}>
+              <ChevronUp className="size-4" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"
+              disabled={idx === totalBlocks - 1} onClick={(e) => { e.stopPropagation(); onMove(block.id, "down"); }}>
+              <ChevronDown className="size-4" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive text-muted-foreground"
+              onClick={(e) => { e.stopPropagation(); onRemove(block.id); }}>
+              <X className="size-4" />
+            </Button>
           </div>
-        )}
-      </CardContent>
+        </div>
+      )}
     </Card>
   );
 }

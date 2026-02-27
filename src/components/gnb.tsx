@@ -16,7 +16,7 @@ export function GNB() {
     <header className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="max-w-3xl mx-auto flex h-12 items-center px-4">
         <Link href="/">
-          <img src="/book.svg" alt="홈" className="h-5 w-5" />
+          <img src="/logo.svg" alt="홈" className="h-7 w-7" />
         </Link>
         <nav className="ml-4 flex items-center gap-1">
           {status !== "loading" && !session?.user ? (
