@@ -33,6 +33,7 @@ export async function GET(
       ...q,
       options: JSON.parse((q.options as string) || "[]"),
       required: Boolean(q.required),
+      multipleAnswers: Boolean(q.multipleAnswers),
     }));
 
     return NextResponse.json({
@@ -114,7 +115,7 @@ export async function PUT(
     if (questions && Array.isArray(questions)) {
       for (const q of questions) {
         await db.execute({
-          sql: "INSERT INTO questions (id, surveyId, type, title, options, required, questionOrder) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          sql: "INSERT INTO questions (id, surveyId, type, title, options, required, multipleAnswers, questionOrder) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
           args: [
             q.id || uuidv4(),
             id,
@@ -122,6 +123,7 @@ export async function PUT(
             q.title || "",
             JSON.stringify(q.options || []),
             q.required ? 1 : 0,
+            q.multipleAnswers ? 1 : 0,
             q.order ?? 0,
           ],
         });

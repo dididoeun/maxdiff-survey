@@ -96,4 +96,11 @@ export async function initDb() {
   } catch {
     // Column already exists
   }
+
+  // Add multipleAnswers column to existing questions table (ignore if already exists)
+  try {
+    await db.execute("ALTER TABLE questions ADD COLUMN multipleAnswers INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    // Column already exists
+  }
 }

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { ThumbsUp, CircleCheck, Equal, AlignJustify, ChevronDown, ChevronUp, GripVertical, SeparatorHorizontal, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -62,6 +63,7 @@ interface GeneralBlock {
   title: string;
   options: string[];
   required: boolean;
+  multipleAnswers?: boolean;
   order: number;
 }
 
@@ -80,6 +82,7 @@ export interface Question {
   title: string;
   options: string[];
   required: boolean;
+  multipleAnswers?: boolean;
   order: number;
 }
 
@@ -139,6 +142,7 @@ function createBlock(type: Block["type"], order: number): Block {
     title: "",
     options: type === "multiple_choice" ? ["", ""] : [],
     required: true,
+    multipleAnswers: false,
     order,
   };
 }
@@ -259,6 +263,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
           title: prevTitle,
           options: type === "multiple_choice" ? ["", ""] : [],
           required: prevRequired,
+          multipleAnswers: false,
           order: b.order,
         };
       })
@@ -791,12 +796,16 @@ function BlockCard({
           <div className="space-y-2 pl-1">
             {block.options.map((opt, optIdx) => (
               <div key={optIdx} className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground w-4 shrink-0">{optIdx + 1}.</span>
+                {block.multipleAnswers ? (
+                  <Checkbox disabled className="shrink-0 pointer-events-none" />
+                ) : (
+                  <div className="size-4 rounded-full border-2 border-muted-foreground/40 shrink-0" />
+                )}
                 <Input
                   value={opt}
                   onChange={(e) => onUpdateOption(block.id, optIdx, e.target.value)}
                   placeholder={`선택지 ${optIdx + 1}`}
-                  className="flex-1 h-8 px-2.5 text-sm"
+                  className="flex-1 h-8 px-2.5 text-sm border-0 shadow-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                   onClick={(e) => e.stopPropagation()}
                 />
                 <Button type="button" variant="ghost" size="icon"
@@ -819,7 +828,7 @@ function BlockCard({
 
       {/* 카드 푸터 - 포커스 시에만 표시 */}
       {isFocused && (
-        <div className="border-t border-border px-4 pt-4 pb-0 flex items-center">
+        <div className="border-t border-border px-4 pt-4 pb-0 flex items-center gap-4">
           {block.type !== "maxdiff" && (
             <label
               className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground"
@@ -832,6 +841,20 @@ function BlockCard({
                 }
               />
               필수 문항
+            </label>
+          )}
+          {block.type === "multiple_choice" && (
+            <label
+              className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Switch
+                checked={block.multipleAnswers ?? false}
+                onCheckedChange={(checked) =>
+                  onUpdate(block.id, { multipleAnswers: checked } as Partial<GeneralBlock>)
+                }
+              />
+              복수 응답
             </label>
           )}
           <div className="flex-1" />

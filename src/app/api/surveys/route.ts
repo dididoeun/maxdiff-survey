@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     if (questions && Array.isArray(questions)) {
       for (const q of questions) {
         await db.execute({
-          sql: "INSERT INTO questions (id, surveyId, type, title, options, required, questionOrder) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          sql: "INSERT INTO questions (id, surveyId, type, title, options, required, multipleAnswers, questionOrder) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
           args: [
             q.id || uuidv4(),
             id,
@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
             q.title || "",
             JSON.stringify(q.options || []),
             q.required ? 1 : 0,
+            q.multipleAnswers ? 1 : 0,
             q.order ?? 0,
           ],
         });

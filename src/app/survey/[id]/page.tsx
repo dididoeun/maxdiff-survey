@@ -17,6 +17,7 @@ interface Question {
   title: string;
   options: string[];
   required: boolean;
+  multipleAnswers?: boolean;
   questionOrder: number;
 }
 
@@ -360,22 +361,37 @@ export default function SurveyPage() {
 
                 {q.type === "multiple_choice" && (
                   <div className="space-y-2">
-                    {q.options.map((opt, i) => (
-                      <label
-                        key={i}
-                        className="flex items-center gap-2 cursor-pointer rounded-lg border border-border px-3 py-2 hover:bg-muted transition-colors has-[:checked]:border-primary/30 has-[:checked]:bg-primary/5"
-                      >
-                        <input
-                          type="radio"
-                          name={`q-${q.id}`}
-                          value={opt}
-                          checked={Array.isArray(ans?.answer) ? ans.answer.includes(opt) : ans?.answer === opt}
-                          onChange={() => handleGeneralAnswer(q.id, opt)}
-                          className="size-4 accent-primary shrink-0"
-                        />
-                        <span className="text-sm text-foreground">{opt}</span>
-                      </label>
-                    ))}
+                    {q.options.map((opt, i) => {
+                      const isChecked = Array.isArray(ans?.answer)
+                        ? ans.answer.includes(opt)
+                        : ans?.answer === opt;
+                      return (
+                        <label
+                          key={i}
+                          className="flex items-center gap-3 cursor-pointer rounded-lg border border-border px-3.5 py-2.5 hover:bg-muted transition-colors has-[:checked]:border-primary/30 has-[:checked]:bg-primary/5"
+                        >
+                          <input
+                            type={q.multipleAnswers ? "checkbox" : "radio"}
+                            name={`q-${q.id}`}
+                            value={opt}
+                            checked={isChecked}
+                            onChange={() => {
+                              if (q.multipleAnswers) {
+                                const prev = Array.isArray(ans?.answer) ? ans.answer : [];
+                                const next = prev.includes(opt)
+                                  ? prev.filter((v) => v !== opt)
+                                  : [...prev, opt];
+                                handleGeneralAnswer(q.id, next);
+                              } else {
+                                handleGeneralAnswer(q.id, opt);
+                              }
+                            }}
+                            className="size-4 accent-primary shrink-0"
+                          />
+                          <span className="text-sm text-foreground">{opt}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 )}
 
