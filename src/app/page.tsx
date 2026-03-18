@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { Box, Button, FlexBox, Typography } from "@wanteddev/wds";
+import { IconEye } from "@wanteddev/wds-icon";
+import { PageContent } from "@/components/page-content";
 
 interface Survey {
   id: string;
@@ -25,47 +25,91 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 pt-[60px] pb-12 text-center">
-      <h1 className="text-[40px] font-bold text-foreground mb-2">
+    <PageContent className="pt-[60px] pb-12 text-center">
+      <Typography
+        variant="title1"
+        weight="bold"
+        sx={(theme) => ({ color: theme.semantic.label.normal, marginBottom: "8px", display: "block" })}
+      >
         원티드 UX 리서치
-      </h1>
-      <p className="text-muted-foreground">
+      </Typography>
+      <Typography
+        variant="body1"
+        sx={(theme) => ({ color: theme.semantic.label.alternative, display: "block" })}
+      >
         UX 리서치를 위한 설문조사를 만들고 결과를 분석하세요.
-      </p>
+      </Typography>
 
-      <Link href="/admin" className={cn(buttonVariants({ variant: "secondary", size: "lg" }), "mt-[32px] mb-[48px] h-10 px-3.5")}>
+      <Button
+        as={Link}
+        href="/admin"
+        variant="solid"
+        color="assistive"
+        size="large"
+        sx={{ marginTop: "32px", marginBottom: "48px" }}
+      >
         + 새 설문 만들기
-      </Link>
+      </Button>
 
       {surveys.length > 0 && (
-        <div>
-          <div className="space-y-3">
-            {surveys.map((s) => {
-              const itemCount = JSON.parse(s.items).length;
-              return (
-                <Card key={s.id} className="h-20">
-                  <CardContent className="flex items-center justify-between h-full px-6 py-0">
-                    <div className="text-left">
-                      <p className="font-medium text-foreground text-sm">{s.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        항목 {itemCount}개 · {s.createdAt}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Link href={`/survey/${s.id}`} className={cn(buttonVariants({ variant: "secondary" }), "size-8")} title="미리보기">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
-                      </Link>
-                      <Link href={`/dashboard/${s.id}`} className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "h-8")}>
-                        대시보드
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+        <div className="space-y-3">
+          {surveys.map((s) => {
+            const itemCount = JSON.parse(s.items).length;
+            return (
+              <Box
+                key={s.id}
+                sx={(theme) => ({
+                  height: "80px",
+                  border: `1px solid ${theme.semantic.line.solid.normal}`,
+                  borderRadius: "8px",
+                  padding: "0 24px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                })}
+              >
+                <div className="text-left">
+                  <Typography
+                    variant="body2"
+                    weight="medium"
+                    sx={(theme) => ({ color: theme.semantic.label.normal, display: "block" })}
+                  >
+                    {s.title}
+                  </Typography>
+                  <Typography
+                    variant="caption1"
+                    sx={(theme) => ({ color: theme.semantic.label.alternative, marginTop: "2px", display: "block" })}
+                  >
+                    항목 {itemCount}개 · {s.createdAt}
+                  </Typography>
+                </div>
+                <FlexBox gap="8px">
+                  <Button
+                    as={Link}
+                    href={`/survey/${s.id}`}
+                    variant="solid"
+                    color="assistive"
+                    iconOnly
+                    size="small"
+                    title="미리보기"
+                  >
+                    <IconEye />
+                  </Button>
+                  <Button
+                    as={Link}
+                    href={`/dashboard/${s.id}`}
+                    variant="solid"
+                    color="assistive"
+                    size="small"
+                  >
+                    대시보드
+                  </Button>
+                </FlexBox>
+              </Box>
+            );
+          })}
         </div>
       )}
-    </div>
+    </PageContent>
   );
 }

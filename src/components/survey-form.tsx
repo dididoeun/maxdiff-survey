@@ -2,26 +2,37 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { ThumbsUp, CircleCheck, Equal, AlignJustify, ChevronDown, ChevronUp, GripVertical, SeparatorHorizontal, X } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { cn } from "@/lib/utils";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
+  Box,
+  Button,
+  FlexBox,
+  IconButton,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuList,
+  MenuTrigger,
+  Option,
+  ProgressTracker,
+  ProgressTrackerItem,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
+  Switch,
+  TextField,
+  Typography,
+} from "@wanteddev/wds";
+import {
+  IconAlignJustify,
+  IconChevronDown,
+  IconChevronUp,
+  IconCircleCheck,
+  IconClose,
+  IconEye,
+  IconHandle,
+  IconLike,
+  IconLineHorizontal,
+  IconPlus,
+} from "@wanteddev/wds-icon";
+import { PageContent } from "@/components/page-content";
 import {
   DndContext,
   closestCenter,
@@ -101,10 +112,10 @@ interface SurveyFormProps {
   surveyId?: string;
 }
 
-// ── 레이블 ───────────────────────────────────────────────────────────────────
+// ── 레이블 / 아이콘 / 스타일 ─────────────────────────────────────────────────
 
 const BLOCK_TYPE_LABELS: Record<Block["type"], string> = {
-  maxdiff: "MaxDiff 문항",
+  maxdiff: "MaxDiff",
   multiple_choice: "객관식",
   short_answer: "단답형",
   long_answer: "장문형",
@@ -112,14 +123,21 @@ const BLOCK_TYPE_LABELS: Record<Block["type"], string> = {
 };
 
 const BLOCK_TYPE_ICONS: Record<Block["type"], React.ReactNode> = {
-  maxdiff:         <ThumbsUp className="size-4" />,
-  multiple_choice: <CircleCheck className="size-4" />,
-  short_answer:    <Equal className="size-4" />,
-  long_answer:     <AlignJustify className="size-4" />,
-  section:         <SeparatorHorizontal className="size-4" />,
+  maxdiff:         <IconLike />,
+  multiple_choice: <IconCircleCheck />,
+  short_answer:    <IconLineHorizontal />,
+  long_answer:     <IconAlignJustify />,
+  section:         <IconLineHorizontal />,
 };
 
-// 문항 추가 드롭다운 (섹션 제외)
+const BLOCK_TYPE_STYLE: Record<Block["type"], { bg: string; color: string }> = {
+  maxdiff:         { bg: "#EFF6FF", color: "#3B82F6" },
+  multiple_choice: { bg: "#F5F3FF", color: "#8B5CF6" },
+  short_answer:    { bg: "#FFFBEB", color: "#F59E0B" },
+  long_answer:     { bg: "#ECFDF5", color: "#10B981" },
+  section:         { bg: "#F9FAFB", color: "#9CA3AF" },
+};
+
 const ADD_OPTIONS: Exclude<Block["type"], "section">[] = [
   "maxdiff",
   "multiple_choice",
@@ -149,15 +167,11 @@ function createBlock(type: Block["type"], order: number): Block {
 
 function initBlocks(initialData?: SurveyFormData): Block[] {
   const blocks: Block[] = [];
-
-  // 생성 모드(초기 데이터 없음): 기본 객관식 문항 1개 추가
   if (!initialData) {
     blocks.push(createBlock("multiple_choice", 0));
     return blocks;
   }
-
-  // MaxDiff 블록 (초기 데이터에 items가 있으면 복원)
-  if (initialData && initialData.items.length > 0) {
+  if (initialData.items.length > 0) {
     blocks.push({
       id: crypto.randomUUID(),
       type: "maxdiff",
@@ -167,7 +181,6 @@ function initBlocks(initialData?: SurveyFormData): Block[] {
       order: 0,
     });
   }
-  // 일반 문항 / 섹션 블록
   if (initialData?.questions) {
     initialData.questions.forEach((q, i) => {
       if (q.type === "section") {
@@ -187,14 +200,21 @@ function initBlocks(initialData?: SurveyFormData): Block[] {
   return blocks;
 }
 
-// ── 컴포넌트 ─────────────────────────────────────────────────────────────────
+// ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
 export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormProps) {
   const router = useRouter();
+
+  // 초기 blocks와 selectedId를 한 번에 계산해 UUID 불일치 방지
+  const [initData] = useState(() => {
+    const blocks = initBlocks(initialData);
+    return { blocks, selectedId: blocks[0]?.id ?? null };
+  });
+
   const [title, setTitle] = useState(initialData?.title || "");
-  const [blocks, setBlocks] = useState<Block[]>(() => initBlocks(initialData));
-  const [uploading, setUploading] = useState<string | null>(null); // blockId
-  const [focusedId, setFocusedId] = useState<string | null>(null);
+  const [blocks, setBlocks] = useState<Block[]>(initData.blocks);
+  const [selectedId, setSelectedId] = useState<string | null>(initData.selectedId);
+  const [uploading, setUploading] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [savingType, setSavingType] = useState<"draft" | "published" | null>(null);
   const [copied, setCopied] = useState(false);
@@ -204,16 +224,26 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
+  const selectedBlock = blocks.find((b) => b.id === selectedId) ?? null;
+  const selectedIdx = blocks.findIndex((b) => b.id === selectedId);
+
   // ── 블록 조작 ──────────────────────────────────────────────────────────────
 
   const addBlock = (type: Block["type"]) => {
-    setBlocks((prev) => [...prev, createBlock(type, prev.length)]);
+    const newBlock = createBlock(type, blocks.length);
+    setBlocks((prev) => [...prev, newBlock]);
+    setSelectedId(newBlock.id);
   };
 
   const removeBlock = (id: string) => {
-    setBlocks((prev) =>
-      prev.filter((b) => b.id !== id).map((b, i) => ({ ...b, order: i }))
-    );
+    setBlocks((prev) => {
+      const filtered = prev.filter((b) => b.id !== id).map((b, i) => ({ ...b, order: i }));
+      if (selectedId === id) {
+        const removedIdx = prev.findIndex((b) => b.id === id);
+        setSelectedId(filtered[Math.min(removedIdx, filtered.length - 1)]?.id ?? null);
+      }
+      return filtered;
+    });
   };
 
   const moveBlock = (id: string, dir: "up" | "down") => {
@@ -249,8 +279,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
       prev.map((b) => {
         if (b.id !== id) return b;
         if (type === "maxdiff") {
-          const prevTitle = b.type !== "maxdiff" ? b.title : b.title;
-          return { id: b.id, type: "maxdiff", title: prevTitle, items: [], setSize: 4, order: b.order };
+          return { id: b.id, type: "maxdiff", title: b.title, items: [], setSize: 4, order: b.order };
         }
         if (type === "section") {
           return { id: b.id, type: "section", title: b.type !== "maxdiff" ? b.title : "", order: b.order };
@@ -258,8 +287,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         const prevTitle = b.type !== "maxdiff" ? b.title : "";
         const prevRequired = b.type !== "maxdiff" && b.type !== "section" ? b.required : true;
         return {
-          id: b.id,
-          type,
+          id: b.id, type,
           title: prevTitle,
           options: type === "multiple_choice" ? ["", ""] : [],
           required: prevRequired,
@@ -351,15 +379,12 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
 
   const submitSurvey = async (status: "published" | "draft") => {
     if (!title.trim()) return alert("설문 제목을 입력해주세요.");
-
     const maxdiffBlock = blocks.find((b): b is MaxDiffBlock => b.type === "maxdiff");
     const items = maxdiffBlock?.items.map((i) => ({ name: i.name, image: i.image })) ?? [];
     const setSize = maxdiffBlock?.setSize ?? 4;
-
     if (status === "published" && items.length < 2) {
       return alert("발행하려면 MaxDiff 문항에 최소 2개 이상의 항목을 추가해주세요.");
     }
-
     const questions: Question[] = blocks
       .filter((b): b is GeneralBlock | SectionBlock => b.type !== "maxdiff")
       .map((b, i) => {
@@ -368,11 +393,9 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         }
         return { ...b, order: i };
       });
-
     setSavingType(status);
     try {
       const payload = { title, items, setSize, jobRoles: [], status, questions };
-
       if (mode === "edit" && surveyId) {
         const res = await fetch(`/api/surveys/${surveyId}`, {
           method: "PUT",
@@ -380,11 +403,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
           body: JSON.stringify(payload),
         });
         const data = await res.json();
-        if (!res.ok) {
-          alert(data.error || "설문 수정에 실패했습니다.");
-          setSavingType(null);
-          return;
-        }
+        if (!res.ok) { alert(data.error || "설문 수정에 실패했습니다."); setSavingType(null); return; }
         status === "draft" ? router.push("/dashboards") : setCreatedId(surveyId);
       } else {
         const res = await fetch("/api/surveys", {
@@ -393,9 +412,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
           body: JSON.stringify(payload),
         });
         const data = await res.json();
-        if (data.id) {
-          status === "draft" ? router.push("/dashboards") : setCreatedId(data.id);
-        }
+        if (data.id) { status === "draft" ? router.push("/dashboards") : setCreatedId(data.id); }
       }
     } catch {
       alert("설문 저장에 실패했습니다.");
@@ -403,10 +420,8 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
     setSavingType(null);
   };
 
-  const surveyUrl =
-    createdId && typeof window !== "undefined"
-      ? `${window.location.origin}/survey/${createdId}`
-      : "";
+  const surveyUrl = createdId && typeof window !== "undefined"
+    ? `${window.location.origin}/survey/${createdId}` : "";
 
   const copyUrl = () => {
     navigator.clipboard.writeText(surveyUrl);
@@ -418,155 +433,372 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
 
   if (createdId) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-12 text-center">
+      <PageContent className="py-12 text-center">
         <img src="/success.svg" alt="" className="mx-auto mb-4" />
-        <h2 className="text-2xl font-semibold text-foreground">
+        <Typography variant="title3" weight="bold" sx={(theme) => ({ color: theme.semantic.label.normal, display: "block" })}>
           {mode === "edit" ? "설문을 수정했어요!" : "설문을 만들었어요!"}
-        </h2>
-        <p className="text-muted-foreground mt-1 mb-6">아래 URL을 응답자에게 공유하세요.</p>
-        <div className="flex items-center gap-2 mb-6">
-          <Input readOnly value={surveyUrl} className="h-10 px-3.5" />
-          <Button variant="outline" onClick={copyUrl} className="whitespace-nowrap h-10 px-3.5">
+        </Typography>
+        <Typography variant="body2" sx={(theme) => ({ color: theme.semantic.label.alternative, display: "block", marginTop: "4px", marginBottom: "24px" })}>
+          아래 URL을 응답자에게 공유하세요.
+        </Typography>
+        <FlexBox alignItems="center" gap="8px" sx={{ marginBottom: "24px" }}>
+          <TextField readOnly value={surveyUrl} width="100%" />
+          <Button variant="outlined" color="assistive" onClick={copyUrl} sx={{ whiteSpace: "nowrap", flexShrink: 0 }}>
             {copied ? "복사됨!" : "URL 복사"}
           </Button>
-        </div>
-        <div className="flex gap-2 justify-center">
-          <Button variant="secondary" onClick={() => router.push(`/survey/${createdId}`)}>
-            설문 미리보기
-          </Button>
-          <Button variant="secondary" onClick={() => router.push(`/dashboard/${createdId}`)}>
-            대시보드 보기
-          </Button>
-        </div>
-      </div>
+        </FlexBox>
+        <FlexBox gap="8px" justifyContent="center">
+          <Button variant="outlined" color="assistive" onClick={() => router.push(`/survey/${createdId}`)}>설문 미리보기</Button>
+          <Button variant="outlined" color="assistive" onClick={() => router.push(`/dashboard/${createdId}`)}>대시보드 보기</Button>
+        </FlexBox>
+      </PageContent>
     );
   }
 
-  // ── 폼 ────────────────────────────────────────────────────────────────────
+  // ── 3-패널 에디터 ─────────────────────────────────────────────────────────
 
   return (
-    <>
-      {/* Sticky 타이틀 바 */}
-      <div className="sticky top-12 z-40 w-full bg-white border-b border-border pb-2">
-        <div className="max-w-3xl mx-auto px-4 h-12 flex items-center justify-between">
-          <h1 className="text-base font-semibold text-foreground">
-            {mode === "edit" ? "설문 수정하기" : "새 설문 만들기"}
-          </h1>
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => submitSurvey("draft")}
-              disabled={savingType !== null}
-            >
-              {savingType === "draft" ? "저장 중..." : "임시저장"}
-            </Button>
-            <Button
-              onClick={() => submitSurvey("published")}
-              disabled={savingType !== null}
-            >
-              {savingType === "published" ? "저장 중..." : "설문 생성하기"}
-            </Button>
-          </div>
-        </div>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 48px)" }}>
 
-    <div className="min-h-screen bg-white">
-    <div className="max-w-3xl mx-auto px-4 py-8">
-      {/* 설문 제목 */}
-      <div className="mb-8">
-        <Input
-          id="title"
-          type="text"
+      {/* ── 상단 헤더 ── */}
+      <Box
+        sx={(theme) => ({
+          flexShrink: 0,
+          height: "52px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          paddingLeft: "20px",
+          paddingRight: "20px",
+          backgroundColor: theme.semantic.background.normal.normal,
+          borderBottom: `1px solid ${theme.semantic.line.solid.normal}`,
+        })}
+      >
+        <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="설문 제목을 입력해 주세요."
-          className="h-10 px-3.5"
+          placeholder="설문 제목 없음"
+          style={{
+            border: "none",
+            outline: "none",
+            fontWeight: 600,
+            fontSize: "14px",
+            background: "transparent",
+            color: "inherit",
+            flex: 1,
+            minWidth: 0,
+            marginRight: "16px",
+          }}
         />
-      </div>
-
-      {/* 문항 블록 목록 */}
-      {blocks.length > 0 && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-4 mb-6">
-              {(() => {
-                let sectionCount = 0;
-                return blocks.map((block, idx) => {
-                  if (block.type === "section") sectionCount++;
-                  return (
-                    <SortableBlockCard
-                      key={block.id}
-                      block={block}
-                      idx={idx}
-                      totalBlocks={blocks.length}
-                      uploading={uploading}
-                      isFocused={focusedId === block.id}
-                      onFocus={setFocusedId}
-                      sectionNumber={block.type === "section" ? sectionCount : undefined}
-                      onMove={moveBlock}
-                      onRemove={removeBlock}
-                      onUpdate={updateBlock}
-                      onChangeType={changeBlockType}
-                      onAddItem={addItem}
-                      onRemoveItem={removeItem}
-                      onImageUpload={handleImageUpload}
-                      onAddOption={addOption}
-                      onUpdateOption={updateOption}
-                      onRemoveOption={removeOption}
-                    />
-                  );
-                });
-              })()}
-            </div>
-          </SortableContext>
-        </DndContext>
-      )}
-
-      {/* 문항/섹션 추가 */}
-      <div className="flex gap-2 mb-10 justify-center">
-        <Button
-          type="button"
-          variant="ghost"
-          size="lg"
-          onClick={() => addBlock("section")}
-          className="whitespace-nowrap hover:bg-neutral-200"
-        >
-          섹션 추가
-        </Button>
-        <div className="w-px h-3.5 bg-border self-center" />
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "lg" }),
-              "hover:bg-neutral-200"
-            )}
+        <FlexBox gap="8px" sx={{ flexShrink: 0 }}>
+          <Button
+            variant="outlined"
+            color="assistive"
+            size="small"
+            disabled={savingType !== null}
+            onClick={() => submitSurvey("draft")}
           >
-            문항 추가
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            {ADD_OPTIONS.map((type) => (
-              <DropdownMenuItem
-                key={type}
-                onClick={() => addBlock(type)}
-                className="h-8 gap-2 cursor-pointer"
-              >
-                {BLOCK_TYPE_ICONS[type]}
-                {BLOCK_TYPE_LABELS[type]}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+            {savingType === "draft" ? "저장 중..." : "임시저장"}
+          </Button>
+          <Button
+            variant="solid"
+            color="primary"
+            size="small"
+            disabled={savingType !== null}
+            onClick={() => submitSurvey("published")}
+          >
+            {savingType === "published" ? "저장 중..." : "설문 생성하기"}
+          </Button>
+        </FlexBox>
+      </Box>
 
+      {/* ── 3-패널 본문 ── */}
+      <Box
+        sx={(theme) => ({
+          flex: 1,
+          display: "flex",
+          overflow: "hidden",
+          gap: "20px",
+          padding: "20px",
+          backgroundColor: theme.semantic.background.normal.normal,
+        })}
+      >
+
+        {/* ── LEFT: 문항 목록 사이드바 ── */}
+        <Box
+          sx={(theme) => ({
+            width: "240px",
+            flexShrink: 0,
+            border: `1px solid ${theme.semantic.line.normal.alternative}`,
+            borderRadius: "12px",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            backgroundColor: theme.semantic.background.normal.alternative,
+          })}
+        >
+          {/* 문항 목록 */}
+          <div style={{ flex: 1, overflowY: "auto", paddingTop: "8px", paddingBottom: "8px" }}>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+                {(() => {
+                  let qNum = 0;
+                  return blocks.map((block) => {
+                    if (block.type !== "section") qNum++;
+                    return (
+                      <SortableQuestionListItem
+                        key={block.id}
+                        block={block}
+                        questionNumber={block.type !== "section" ? qNum : undefined}
+                        selected={selectedId === block.id}
+                        onSelect={() => setSelectedId(block.id)}
+                        onRemove={removeBlock}
+                      />
+                    );
+                  });
+                })()}
+              </SortableContext>
+            </DndContext>
+          </div>
+
+          {/* 섹션 추가 */}
+          <Box
+            sx={(theme) => ({
+              flexShrink: 0,
+              padding: "8px 12px",
+              borderTop: `1px solid ${theme.semantic.line.normal.alternative}`,
+            })}
+          >
+            <Button
+              variant="outlined"
+              color="assistive"
+              size="small"
+              fullWidth
+              leadingContent={<IconPlus />}
+              onClick={() => addBlock("section")}
+            >
+              섹션 추가
+            </Button>
+          </Box>
+
+        </Box>
+
+        {/* ── CENTER: 문항 에디터 ── */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+          }}
+        >
+          {/* 툴바 래퍼 — 중앙 배치 */}
+          <div style={{ flexShrink: 0, display: "flex", justifyContent: "center", padding: "12px 16px" }}>
+          <Box
+            sx={(theme) => ({
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 12px",
+              backgroundColor: theme.semantic.background.normal.alternative,
+              width: "fit-content",
+              borderRadius: "12px",
+            })}
+          >
+            {/* 문항 추가 */}
+            <Menu>
+              <MenuTrigger>
+                <Button
+                  variant="solid"
+                  color="primary"
+                  size="small"
+                  leadingContent={<IconPlus />}
+                >
+                  문항 추가
+                </Button>
+              </MenuTrigger>
+              <MenuContent>
+                <MenuList>
+                  {ADD_OPTIONS.map((type) => (
+                    <MenuItem key={type} value={type} onClick={() => addBlock(type)}>
+                      <FlexBox alignItems="center" gap="8px">
+                        <div style={{
+                          width: 20, height: 20, borderRadius: 4,
+                          backgroundColor: BLOCK_TYPE_STYLE[type].bg,
+                          color: BLOCK_TYPE_STYLE[type].color,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                        }}>
+                          <div style={{ width: 12, height: 12 }}>{BLOCK_TYPE_ICONS[type]}</div>
+                        </div>
+                        {BLOCK_TYPE_LABELS[type]}
+                      </FlexBox>
+                    </MenuItem>
+                  ))}
+                </MenuList>
+              </MenuContent>
+            </Menu>
+
+            {/* 구분선 */}
+            <div style={{ width: 1, height: 20, backgroundColor: "#E5E7EB" }} />
+
+            {/* 미리보기 */}
+            <Button
+              variant="outlined"
+              color="assistive"
+              size="small"
+              disabled={!surveyId}
+              leadingContent={<IconEye />}
+              onClick={() => surveyId && window.open(`/survey/${surveyId}`, "_blank")}
+            >
+              미리보기
+            </Button>
+          </Box>
+          </div>
+
+          {/* 에디터 콘텐츠 */}
+          <div
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              display: "flex",
+              justifyContent: "center",
+              padding: "40px 32px",
+            }}
+          >
+            <div style={{ width: "100%", maxWidth: "520px" }}>
+              {/* 섹션 Progress Tracker */}
+              {blocks.some((b) => b.type === "section") && (
+                <SurveyProgressTracker blocks={blocks} selectedId={selectedId} onSelect={setSelectedId} />
+              )}
+            <div style={{ border: "1px solid #E5E7EB", borderRadius: "8px", padding: "60px 52px" }}>
+              {selectedBlock ? (
+                <CenterEditor
+                  block={selectedBlock}
+                  idx={selectedIdx}
+                  uploading={uploading}
+                  onUpdate={updateBlock}
+                  onAddItem={addItem}
+                  onRemoveItem={removeItem}
+                  onImageUpload={handleImageUpload}
+                  onAddOption={addOption}
+                  onUpdateOption={updateOption}
+                  onRemoveOption={removeOption}
+                />
+              ) : (
+                <FlexBox alignItems="center" justifyContent="center" sx={{ minHeight: "120px" }}>
+                  <Typography variant="body2" sx={(theme) => ({ color: theme.semantic.label.alternative })}>
+                    왼쪽에서 문항을 선택하거나 추가하세요
+                  </Typography>
+                </FlexBox>
+              )}
+            </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── RIGHT: 문항 설정 패널 ── */}
+        <Box
+          sx={(theme) => ({
+            width: "272px",
+            flexShrink: 0,
+            border: `1px solid ${theme.semantic.line.normal.alternative}`,
+            borderRadius: "12px",
+            overflowY: "auto",
+            backgroundColor: theme.semantic.background.normal.alternative,
+          })}
+        >
+          {selectedBlock ? (
+            <RightSettings
+              block={selectedBlock}
+              idx={selectedIdx}
+              totalBlocks={blocks.length}
+              onUpdate={updateBlock}
+              onChangeType={changeBlockType}
+              onRemove={removeBlock}
+              onMove={moveBlock}
+            />
+          ) : (
+            <Box sx={{ padding: "20px" }}>
+              <Typography variant="caption1" sx={(theme) => ({ color: theme.semantic.label.alternative })}>
+                문항을 선택하면 설정이 표시됩니다.
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      </Box>
     </div>
-    </div>
-    </>
   );
 }
 
-// ── Sortable 래퍼 ─────────────────────────────────────────────────────────────
+// ── Progress Tracker ─────────────────────────────────────────────────────────
 
-function SortableBlockCard(props: BlockCardProps) {
+interface SurveyProgressTrackerProps {
+  blocks: Block[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}
+
+function SurveyProgressTracker({ blocks, selectedId, onSelect }: SurveyProgressTrackerProps) {
+  // 섹션을 경계로 페이지 그룹 생성 (N 섹션 = N+1 페이지)
+  const pages: { label: string; jumpToId: string }[] = [];
+
+  const firstNonSection = blocks.find((b) => b.type !== "section");
+  if (firstNonSection) {
+    pages.push({ label: "1페이지", jumpToId: firstNonSection.id });
+  }
+
+  blocks.forEach((b, i) => {
+    if (b.type === "section") {
+      const nextBlock = blocks[i + 1] ?? b;
+      pages.push({
+        label: (b as SectionBlock).title || `${pages.length + 1}페이지`,
+        jumpToId: nextBlock.id,
+      });
+    }
+  });
+
+  // 현재 선택된 블록이 속한 페이지 인덱스
+  const currentPageIdx = (() => {
+    if (!selectedId) return 0;
+    const selectedPos = blocks.findIndex((b) => b.id === selectedId);
+    let pageIdx = 0;
+    for (let i = 0; i < selectedPos; i++) {
+      if (blocks[i].type === "section") pageIdx++;
+    }
+    return pageIdx;
+  })();
+
+  return (
+    <ProgressTracker
+      value={String(currentPageIdx)}
+      onValueChange={(val) => {
+        const idx = Number(val);
+        if (pages[idx]) onSelect(pages[idx].jumpToId);
+      }}
+      sx={{ marginBottom: "20px" }}
+    >
+      {pages.map((page, idx) => (
+        <ProgressTrackerItem
+          key={page.jumpToId}
+          value={String(idx)}
+          label={page.label}
+        />
+      ))}
+    </ProgressTracker>
+  );
+}
+
+// ── LEFT 사이드바 아이템 ───────────────────────────────────────────────────────
+
+interface QuestionListItemProps {
+  block: Block;
+  questionNumber?: number;
+  selected: boolean;
+  onSelect: () => void;
+  onRemove: (id: string) => void;
+}
+
+function SortableQuestionListItem(props: QuestionListItemProps) {
   const isSection = props.block.type === "section";
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: props.block.id, disabled: isSection });
@@ -574,38 +806,143 @@ function SortableBlockCard(props: BlockCardProps) {
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    opacity: isDragging ? 0.4 : 1,
   };
 
   return (
-    <div ref={setNodeRef} style={style} className={cn("group/sortable relative", isDragging && "opacity-50")}>
-      {!isSection && (
-        <div
-          className="absolute -left-6 top-3 opacity-0 group-hover/sortable:opacity-100 transition-opacity cursor-grab active:cursor-grabbing touch-none"
-          {...attributes}
-          {...listeners}
-        >
-          <GripVertical className="size-4 text-muted-foreground" />
-        </div>
-      )}
-      <BlockCard {...props} />
+    <div ref={setNodeRef} style={style}>
+      <QuestionListItem {...props} dragAttributes={attributes} dragListeners={listeners} />
     </div>
   );
 }
 
-// ── 블록 카드 컴포넌트 ────────────────────────────────────────────────────────
+function QuestionListItem({
+  block,
+  questionNumber,
+  selected,
+  onSelect,
+  onRemove,
+  dragAttributes,
+  dragListeners,
+}: QuestionListItemProps & {
+  dragAttributes?: ReturnType<typeof useSortable>["attributes"];
+  dragListeners?: ReturnType<typeof useSortable>["listeners"];
+}) {
+  const isSection = block.type === "section";
+  const typeStyle = BLOCK_TYPE_STYLE[block.type];
 
-interface BlockCardProps {
+  if (isSection) {
+    return (
+      <div
+        onClick={onSelect}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "6px 12px",
+          cursor: "pointer",
+          backgroundColor: selected ? "#F3F4F6" : "transparent",
+        }}
+      >
+        <div style={{ flex: 1, height: 1, backgroundColor: "#E5E7EB" }} />
+        <Typography
+          variant="caption1"
+          sx={(theme) => ({
+            color: theme.semantic.label.alternative,
+            whiteSpace: "nowrap",
+            fontSize: "11px",
+
+          })}
+        >
+          {block.title || "섹션"}
+        </Typography>
+        <div style={{ flex: 1, height: 1, backgroundColor: "#E5E7EB" }} />
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemove(block.id); }}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 16, height: 16, border: "none", background: "none", cursor: "pointer",
+            color: "#9CA3AF", padding: 0, flexShrink: 0,
+          }}
+        >
+          <IconClose style={{ width: 10, height: 10 }} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      onClick={onSelect}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+        padding: "6px 8px",
+        margin: "2px 8px",
+        cursor: "pointer",
+        backgroundColor: selected ? "#EBEBEB" : "transparent",
+        borderRadius: "8px",
+        transition: "background-color 0.1s",
+      }}
+      onMouseEnter={(e) => { if (!selected) (e.currentTarget as HTMLDivElement).style.backgroundColor = "#F5F5F5"; }}
+      onMouseLeave={(e) => { if (!selected) (e.currentTarget as HTMLDivElement).style.backgroundColor = "transparent"; }}
+    >
+      {/* 드래그 핸들 */}
+      <div
+        {...dragAttributes}
+        {...dragListeners}
+        onClick={(e) => e.stopPropagation()}
+        style={{ cursor: "grab", touchAction: "none", flexShrink: 0, color: "#C4C4C4", display: "flex", padding: "2px" }}
+      >
+        <IconHandle style={{ width: 10, height: 10 }} />
+      </div>
+
+      {/* 타입 뱃지 */}
+      <div
+        style={{
+          width: 32, height: 32, borderRadius: 8,
+          backgroundColor: typeStyle.bg,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0, color: typeStyle.color,
+        }}
+      >
+        <div style={{ width: 15, height: 15, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {BLOCK_TYPE_ICONS[block.type]}
+        </div>
+      </div>
+
+      {/* 번호 */}
+      <span style={{ fontSize: "13px", fontWeight: 500, color: "#374151", flex: 1 }}>
+        {questionNumber}
+      </span>
+
+      {/* 삭제 버튼 (선택 시만) */}
+      {selected && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemove(block.id); }}
+          style={{
+            display: "flex", alignItems: "center", justifyContent: "center",
+            width: 20, height: 20, border: "none", background: "none",
+            cursor: "pointer", color: "#9CA3AF", padding: 0, flexShrink: 0, borderRadius: 4,
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#EF4444"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#9CA3AF"; }}
+        >
+          <IconClose style={{ width: 12, height: 12 }} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── CENTER 에디터 ─────────────────────────────────────────────────────────────
+
+interface CenterEditorProps {
   block: Block;
   idx: number;
-  totalBlocks: number;
   uploading: string | null;
-  isFocused: boolean;
-  onFocus: (id: string) => void;
-  sectionNumber?: number;
-  onMove: (id: string, dir: "up" | "down") => void;
-  onRemove: (id: string) => void;
   onUpdate: (id: string, patch: Partial<Block>) => void;
-  onChangeType: (id: string, type: Block["type"]) => void;
   onAddItem: (blockId: string, name: string) => void;
   onRemoveItem: (blockId: string, itemId: string) => void;
   onImageUpload: (blockId: string, itemId: string, file: File) => void;
@@ -614,266 +951,467 @@ interface BlockCardProps {
   onRemoveOption: (blockId: string, idx: number) => void;
 }
 
-function SectionTitleButton({
-  block, sectionNumber, onUpdate,
-}: { block: SectionBlock; sectionNumber: number; onUpdate: (id: string, patch: Partial<Block>) => void }) {
-  const [editing, setEditing] = useState(false);
-  const displayText = block.title.trim() || `Section ${sectionNumber}`;
-
-  if (editing) {
-    return (
-      <input
-        autoFocus
-        value={block.title}
-        onChange={(e) => onUpdate(block.id, { title: e.target.value } as Partial<SectionBlock>)}
-        onBlur={() => setEditing(false)}
-        onKeyDown={(e) => { if (e.key === "Enter") setEditing(false); }}
-        placeholder={`Section ${sectionNumber}`}
-        className="w-28 h-6 text-xs text-center bg-transparent border-b border-border outline-none px-1 text-foreground"
-      />
-    );
-  }
-  return (
-    <button
-      type="button"
-      onClick={() => setEditing(true)}
-      className="text-xs text-muted-foreground font-medium whitespace-nowrap hover:text-foreground transition-colors px-2 shrink-0"
-    >
-      {displayText}
-    </button>
-  );
-}
-
-function BlockCard({
-  block, idx, totalBlocks, uploading,
-  isFocused, onFocus, sectionNumber,
-  onMove, onRemove, onUpdate, onChangeType,
-  onAddItem, onRemoveItem, onImageUpload,
-  onAddOption, onUpdateOption, onRemoveOption,
-}: BlockCardProps) {
+function CenterEditor(props: CenterEditorProps) {
+  const { block, idx, uploading, onUpdate, onAddItem, onRemoveItem, onImageUpload, onAddOption, onUpdateOption, onRemoveOption } = props;
   const [newItemName, setNewItemName] = useState("");
 
-  // ── 섹션 카드 ────────────────────────────────────────────────────────────────
   if (block.type === "section") {
     return (
-      <div className="flex items-center gap-2 h-10 w-full overflow-hidden">
-        <div className="h-px bg-border flex-1 min-w-0" />
-        <SectionTitleButton block={block} sectionNumber={sectionNumber ?? 1} onUpdate={onUpdate} />
-        <div className="h-px bg-border flex-1 min-w-0" />
-        <Button
-          type="button" variant="ghost" size="icon"
-          className="h-7 w-7 hover:text-destructive text-muted-foreground shrink-0"
-          onClick={() => onRemove(block.id)}
-        ><X className="size-3.5" /></Button>
+      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+        <div style={{ flex: 1, height: 1, backgroundColor: "#E5E7EB" }} />
+        <input
+          value={block.title}
+          onChange={(e) => onUpdate(block.id, { title: e.target.value } as Partial<SectionBlock>)}
+          placeholder="섹션 제목"
+          style={{
+            border: "none", outline: "none", textAlign: "center",
+            fontWeight: 600, fontSize: "13px", color: "#6B7280",
+            background: "transparent",
+          }}
+        />
+        <div style={{ flex: 1, height: 1, backgroundColor: "#E5E7EB" }} />
       </div>
     );
   }
 
   return (
-    <Card
-      className={cn("border-border cursor-pointer transition-colors", isFocused && "border-gray-400 ring-2 ring-gray-300")}
-      onClick={() => onFocus(block.id)}
-    >
-      <CardContent className="px-4 py-0 space-y-4">
-        {/* 문항 제목 + 타입 뱃지 행 */}
-        <div className="flex items-center gap-2">
-          <Input
-            value={block.title}
-            onChange={(e) => onUpdate(block.id, { title: e.target.value })}
-            placeholder="문항 제목"
-            className="flex-1 h-10 px-3 text-sm"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <Select
-            value={block.type}
-            onValueChange={(value) => onChangeType(block.id, value as Block["type"])}
-          >
-            <SelectTrigger
-              className="!h-10 w-fit shrink-0 text-sm bg-secondary border-0 shadow-none px-3.5"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <span className="flex items-center gap-1.5">
-                {BLOCK_TYPE_ICONS[block.type]}
-                {BLOCK_TYPE_LABELS[block.type]}
-              </span>
-            </SelectTrigger>
-            <SelectContent className="p-1">
-              {ADD_OPTIONS.map((type) => (
-                <SelectItem key={type} value={type}>
-                  <span className="flex items-center gap-2">
-                    {BLOCK_TYPE_ICONS[type]}
-                    {BLOCK_TYPE_LABELS[type]}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+    <div>
+      {/* 문항 번호 + 질문 (Typeform 스타일: "Q{n} →" 프리픽스) */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "6px" }}>
+        <span
+          style={{
+            fontSize: "16px",
+            fontWeight: 600,
+            color: "#6366F1",
+            flexShrink: 0,
+            lineHeight: "1.6",
+            paddingTop: "2px",
+          }}
+        >
+          {idx + 1} →
+        </span>
+        <textarea
+          value={block.title}
+          onChange={(e) => onUpdate(block.id, { title: e.target.value })}
+          placeholder="질문을 입력하세요"
+          rows={2}
+          style={{
+            flex: 1,
+            border: "none",
+            outline: "none",
+            fontSize: "18px",
+            fontWeight: 400,
+            color: "#111827",
+            background: "transparent",
+            resize: "none",
+            lineHeight: "1.6",
+            fontFamily: "inherit",
+          }}
+        />
+      </div>
 
-        {/* MaxDiff 블록 */}
-        {block.type === "maxdiff" && (
-          <div className="space-y-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor={`setSize-${block.id}`} className="text-sm">한 세트에 보여줄 항목 수</Label>
-              <Input
-                id={`setSize-${block.id}`}
-                type="number"
-                min={2}
-                max={8}
-                value={block.setSize}
-                onChange={(e) => onUpdate(block.id, { setSize: Number(e.target.value) } as Partial<MaxDiffBlock>)}
-                className="w-20 h-8 px-2.5 text-sm"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
+      {/* 설명 입력 */}
+      <div style={{ paddingLeft: "34px", marginBottom: "32px" }}>
+        <input
+          placeholder="Description (optional)"
+          style={{
+            width: "100%",
+            border: "none",
+            outline: "none",
+            fontSize: "14px",
+            fontStyle: "italic",
+            color: "#9CA3AF",
+            background: "transparent",
+            fontFamily: "inherit",
+          }}
+        />
+      </div>
 
-            <form
-              className="flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                onAddItem(block.id, newItemName);
-                setNewItemName("");
-              }}
-            >
-              <Input
-                type="text"
-                value={newItemName}
-                onChange={(e) => setNewItemName(e.target.value)}
-                placeholder="항목 이름 (예: Button)"
-                className="h-9 px-3 text-sm"
-                onClick={(e) => e.stopPropagation()}
-              />
-              <Button type="submit" variant="outline" className="h-9 px-3 text-sm shrink-0">
-                항목 추가
-              </Button>
-            </form>
-
-            {block.items.length > 0 && (
-              <div className="space-y-2">
-                {block.items.map((item) => (
-                  <div key={item.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
-                    <div className="w-10 h-10 shrink-0 bg-muted rounded-md overflow-hidden flex items-center justify-center">
-                      {item.image ? (
-                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <label className="cursor-pointer text-muted-foreground">
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/gif,image/webp"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) onImageUpload(block.id, item.id, file);
-                            }}
-                          />
-                          {uploading === item.id ? (
-                            <span className="text-xs">...</span>
-                          ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                          )}
-                        </label>
-                      )}
-                    </div>
-                    <span className="flex-1 text-sm text-foreground">{item.name}</span>
-                    {item.image && (
-                      <Button variant="ghost" size="sm" className="h-6 text-xs text-destructive hover:text-destructive px-1"
-                        onClick={(e) => { e.stopPropagation(); onUpdate(block.id, { items: block.items.map((i) => i.id === item.id ? { ...i, image: undefined } : i) } as Partial<MaxDiffBlock>); }}>
-                        이미지 삭제
-                      </Button>
+      {/* MaxDiff 항목 목록 */}
+      {block.type === "maxdiff" && (
+        <div style={{ paddingLeft: "34px" }}>
+          {block.items.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
+              {block.items.map((item) => (
+                <div
+                  key={item.id}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "12px",
+                    border: "1px solid #E5E7EB", borderRadius: "8px", padding: "8px 12px",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36, height: 36, borderRadius: 6, overflow: "hidden",
+                      flexShrink: 0, backgroundColor: "#F3F4F6",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}
+                  >
+                    {item.image ? (
+                      <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      <label style={{ cursor: "pointer", color: "#9CA3AF", display: "flex" }}>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif,image/webp"
+                          style={{ display: "none" }}
+                          onChange={(e) => { const f = e.target.files?.[0]; if (f) onImageUpload(block.id, item.id, f); }}
+                        />
+                        {uploading === item.id ? (
+                          <span style={{ fontSize: "10px" }}>...</span>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                        )}
+                      </label>
                     )}
-                    <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
-                      onClick={(e) => { e.stopPropagation(); onRemoveItem(block.id, item.id); }}>×</Button>
                   </div>
-                ))}
-                <p className="text-xs text-muted-foreground">{block.items.length}개 항목 추가됨</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 객관식 선택지 */}
-        {block.type === "multiple_choice" && (
-          <div className="space-y-2 pl-1">
-            {block.options.map((opt, optIdx) => (
-              <div key={optIdx} className="flex items-center gap-2">
-                {block.multipleAnswers ? (
-                  <Checkbox disabled className="shrink-0 pointer-events-none" />
-                ) : (
-                  <div className="size-4 rounded-full border-2 border-muted-foreground/40 shrink-0" />
-                )}
-                <Input
-                  value={opt}
-                  onChange={(e) => onUpdateOption(block.id, optIdx, e.target.value)}
-                  placeholder={`선택지 ${optIdx + 1}`}
-                  className="flex-1 h-8 px-2.5 text-sm border-0 shadow-none bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <Button type="button" variant="ghost" size="icon"
-                  className="h-7 w-7 hover:text-destructive text-muted-foreground shrink-0"
-                  onClick={(e) => { e.stopPropagation(); onRemoveOption(block.id, optIdx); }}
-                  disabled={block.options.length <= 2}>
-                  <X className="size-4" />
-                </Button>
-              </div>
-            ))}
-            <Button type="button" variant="ghost" size="sm"
-              className="h-7 text-xs text-muted-foreground pl-6"
-              onClick={(e) => { e.stopPropagation(); onAddOption(block.id); }}>
-              + 선택지 추가
-            </Button>
-          </div>
-        )}
-
-      </CardContent>
-
-      {/* 카드 푸터 - 포커스 시에만 표시 */}
-      {isFocused && (
-        <div className="border-t border-border px-4 pt-4 pb-0 flex items-center gap-4">
-          {block.type !== "maxdiff" && (
-            <label
-              className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Switch
-                checked={block.required}
-                onCheckedChange={(checked) =>
-                  onUpdate(block.id, { required: checked } as Partial<GeneralBlock>)
-                }
-              />
-              필수 문항
-            </label>
+                  <span style={{ flex: 1, fontSize: "14px", color: "#374151" }}>{item.name}</span>
+                  {item.image && (
+                    <button
+                      onClick={() => onUpdate(block.id, { items: block.items.map((i) => i.id === item.id ? { ...i, image: undefined } : i) } as Partial<MaxDiffBlock>)}
+                      style={{ fontSize: "11px", color: "#EF4444", border: "none", background: "none", cursor: "pointer", padding: "2px 6px" }}
+                    >
+                      삭제
+                    </button>
+                  )}
+                  <button
+                    onClick={() => onRemoveItem(block.id, item.id)}
+                    style={{ display: "flex", border: "none", background: "none", cursor: "pointer", color: "#9CA3AF", padding: 2 }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#EF4444"; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#9CA3AF"; }}
+                  >
+                    <IconClose style={{ width: 14, height: 14 }} />
+                  </button>
+                </div>
+              ))}
+              <span style={{ fontSize: "12px", color: "#9CA3AF" }}>{block.items.length}개 항목</span>
+            </div>
           )}
-          {block.type === "multiple_choice" && (
-            <label
-              className="flex items-center gap-2 cursor-pointer text-xs text-muted-foreground"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Switch
-                checked={block.multipleAnswers ?? false}
-                onCheckedChange={(checked) =>
-                  onUpdate(block.id, { multipleAnswers: checked } as Partial<GeneralBlock>)
-                }
-              />
-              복수 응답
-            </label>
-          )}
-          <div className="flex-1" />
-          <div className="flex items-center gap-1">
-            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"
-              disabled={idx === 0} onClick={(e) => { e.stopPropagation(); onMove(block.id, "up"); }}>
-              <ChevronUp className="size-4" />
+          <form
+            style={{ display: "flex", gap: "8px" }}
+            onSubmit={(e) => {
+              e.preventDefault();
+              onAddItem(block.id, newItemName);
+              setNewItemName("");
+            }}
+          >
+            <TextField
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+              placeholder="항목 이름 입력 후 추가"
+              width="100%"
+            />
+            <Button type="submit" variant="outlined" color="assistive" size="small" sx={{ flexShrink: 0 }}>
+              추가
             </Button>
-            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground"
-              disabled={idx === totalBlocks - 1} onClick={(e) => { e.stopPropagation(); onMove(block.id, "down"); }}>
-              <ChevronDown className="size-4" />
-            </Button>
-            <Button type="button" variant="ghost" size="icon" className="h-7 w-7 hover:text-destructive text-muted-foreground"
-              onClick={(e) => { e.stopPropagation(); onRemove(block.id); }}>
-              <X className="size-4" />
-            </Button>
-          </div>
+          </form>
         </div>
       )}
-    </Card>
+
+      {/* 객관식 선택지 */}
+      {block.type === "multiple_choice" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", paddingLeft: "34px" }}>
+          {block.options.map((opt, optIdx) => (
+            <div key={optIdx} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              {block.multipleAnswers ? (
+                <div style={{ width: 16, height: 16, borderRadius: 3, border: "2px solid #D1D5DB", flexShrink: 0 }} />
+              ) : (
+                <div style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid #D1D5DB", flexShrink: 0 }} />
+              )}
+              <input
+                value={opt}
+                onChange={(e) => onUpdateOption(block.id, optIdx, e.target.value)}
+                placeholder={`선택지 ${optIdx + 1}`}
+                style={{
+                  flex: 1, border: "none", borderBottom: "1px solid #E5E7EB",
+                  outline: "none", fontSize: "14px", color: "#374151",
+                  background: "transparent", padding: "4px 0",
+                }}
+              />
+              <button
+                disabled={block.options.length <= 2}
+                onClick={() => onRemoveOption(block.id, optIdx)}
+                style={{
+                  display: "flex", border: "none", background: "none",
+                  cursor: block.options.length > 2 ? "pointer" : "default",
+                  color: "#D1D5DB", padding: 2,
+                }}
+                onMouseEnter={(e) => { if (block.options.length > 2) (e.currentTarget as HTMLButtonElement).style.color = "#EF4444"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#D1D5DB"; }}
+              >
+                <IconClose style={{ width: 14, height: 14 }} />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => onAddOption(block.id)}
+            style={{
+              border: "none", background: "none", cursor: "pointer",
+              color: "#6B7280", fontSize: "13px", textAlign: "left",
+              padding: "4px 0", marginTop: "4px",
+            }}
+          >
+            + 선택지 추가
+          </button>
+        </div>
+      )}
+
+      {/* 단답형 미리보기 */}
+      {block.type === "short_answer" && (
+        <div style={{ paddingLeft: "34px" }}>
+          <input
+            disabled
+            placeholder="답변을 입력하세요..."
+            style={{
+              width: "100%",
+              border: "none",
+              borderBottom: "1px solid #93C5FD",
+              outline: "none",
+              fontSize: "15px",
+              color: "#93C5FD",
+              background: "transparent",
+              padding: "8px 0",
+              fontFamily: "inherit",
+              cursor: "default",
+            }}
+          />
+        </div>
+      )}
+
+      {/* 장문형 미리보기 */}
+      {block.type === "long_answer" && (
+        <div style={{ paddingLeft: "34px" }}>
+          <textarea
+            disabled
+            placeholder="답변을 입력하세요..."
+            rows={3}
+            style={{
+              width: "100%",
+              border: "none",
+              borderBottom: "1px solid #93C5FD",
+              outline: "none",
+              fontSize: "15px",
+              color: "#93C5FD",
+              background: "transparent",
+              padding: "8px 0",
+              fontFamily: "inherit",
+              resize: "none",
+              cursor: "default",
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── RIGHT 설정 패널 ───────────────────────────────────────────────────────────
+
+interface RightSettingsProps {
+  block: Block;
+  idx: number;
+  totalBlocks: number;
+  onUpdate: (id: string, patch: Partial<Block>) => void;
+  onChangeType: (id: string, type: Block["type"]) => void;
+  onRemove: (id: string) => void;
+  onMove: (id: string, dir: "up" | "down") => void;
+}
+
+function RightSettings({ block, idx, totalBlocks, onUpdate, onChangeType, onRemove, onMove }: RightSettingsProps) {
+  return (
+    <div>
+      {/* 헤더: "문항" */}
+      <Box
+        sx={(theme) => ({
+          padding: "16px 20px",
+          borderBottom: `1px solid ${theme.semantic.line.solid.normal}`,
+        })}
+      >
+        <Typography
+          variant="body2"
+          weight="bold"
+          sx={(theme) => ({ color: theme.semantic.label.normal })}
+        >
+          문항
+        </Typography>
+      </Box>
+
+      {/* 답변 유형 섹션 */}
+      {block.type !== "section" && (
+        <Box
+          sx={(theme) => ({
+            padding: "16px 20px",
+            borderBottom: `1px solid ${theme.semantic.line.solid.normal}`,
+          })}
+        >
+          <Typography
+            variant="caption1"
+            weight="bold"
+            sx={(theme) => ({ color: theme.semantic.label.normal, display: "block", marginBottom: "10px" })}
+          >
+            답변
+          </Typography>
+          <Select
+            value={block.type}
+            onChange={(value) => onChangeType(block.id, value as Block["type"])}
+            width="100%"
+            render={(selected) => (
+              <FlexBox alignItems="center" gap="8px">
+                <div style={{
+                  width: 20, height: 20, borderRadius: 4,
+                  backgroundColor: BLOCK_TYPE_STYLE[block.type].bg,
+                  color: BLOCK_TYPE_STYLE[block.type].color,
+                  display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                }}>
+                  <div style={{ width: 12, height: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    {BLOCK_TYPE_ICONS[block.type]}
+                  </div>
+                </div>
+                <span style={{ fontSize: "14px" }}>{selected}</span>
+              </FlexBox>
+            )}
+          >
+            {ADD_OPTIONS.map((type) => (
+              <Option key={type} value={type}>
+                <FlexBox alignItems="center" gap="8px">
+                  <div style={{
+                    width: 20, height: 20, borderRadius: 4,
+                    backgroundColor: BLOCK_TYPE_STYLE[type].bg,
+                    color: BLOCK_TYPE_STYLE[type].color,
+                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                  }}>
+                    <div style={{ width: 12, height: 12, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {BLOCK_TYPE_ICONS[type]}
+                    </div>
+                  </div>
+                  {BLOCK_TYPE_LABELS[type]}
+                </FlexBox>
+              </Option>
+            ))}
+          </Select>
+        </Box>
+      )}
+
+      {/* MaxDiff: 세트 크기 */}
+      {block.type === "maxdiff" && (
+        <Box
+          sx={(theme) => ({
+            padding: "16px 20px",
+            borderBottom: `1px solid ${theme.semantic.line.solid.normal}`,
+          })}
+        >
+          <Typography
+            variant="caption1"
+            sx={(theme) => ({ color: theme.semantic.label.alternative, display: "block", marginBottom: "8px" })}
+          >
+            세트당 항목 수
+          </Typography>
+          <TextField
+            type="number"
+            min={2}
+            max={8}
+            value={String(block.setSize)}
+            onChange={(e) => onUpdate(block.id, { setSize: Number(e.target.value) } as Partial<MaxDiffBlock>)}
+            width="80px"
+          />
+        </Box>
+      )}
+
+      {/* 필수 문항 토글 */}
+      {block.type !== "maxdiff" && block.type !== "section" && (
+        <FlexBox
+          alignItems="center"
+          justifyContent="space-between"
+          sx={(theme) => ({
+            padding: "14px 20px",
+            borderBottom: `1px solid ${theme.semantic.line.solid.normal}`,
+          })}
+        >
+          <Typography variant="body2" sx={(theme) => ({ color: theme.semantic.label.normal })}>
+            필수 문항
+          </Typography>
+          <Switch
+            size="small"
+            checked={(block as GeneralBlock).required}
+            onCheckedChange={(checked) => onUpdate(block.id, { required: checked } as Partial<GeneralBlock>)}
+          />
+        </FlexBox>
+      )}
+
+      {/* 복수 응답 토글 */}
+      {block.type === "multiple_choice" && (
+        <FlexBox
+          alignItems="center"
+          justifyContent="space-between"
+          sx={(theme) => ({
+            padding: "14px 20px",
+            borderBottom: `1px solid ${theme.semantic.line.solid.normal}`,
+          })}
+        >
+          <Typography variant="body2" sx={(theme) => ({ color: theme.semantic.label.normal })}>
+            복수 응답
+          </Typography>
+          <Switch
+            size="small"
+            checked={(block as GeneralBlock).multipleAnswers ?? false}
+            onCheckedChange={(checked) => onUpdate(block.id, { multipleAnswers: checked } as Partial<GeneralBlock>)}
+          />
+        </FlexBox>
+      )}
+
+      {/* 순서 변경 / 삭제 */}
+      <Box
+        sx={(theme) => ({
+          padding: "14px 20px",
+          borderBottom: `1px solid ${theme.semantic.line.solid.normal}`,
+        })}
+      >
+        <Typography
+          variant="caption1"
+          weight="bold"
+          sx={(theme) => ({ color: theme.semantic.label.normal, display: "block", marginBottom: "10px" })}
+        >
+          순서 변경
+        </Typography>
+        <FlexBox gap="8px">
+          <IconButton
+            size={32}
+            title="위로"
+            disabled={idx === 0}
+            sx={(theme) => ({ color: theme.semantic.label.alternative })}
+            onClick={() => onMove(block.id, "up")}
+          >
+            <IconChevronUp />
+          </IconButton>
+          <IconButton
+            size={32}
+            title="아래로"
+            disabled={idx === totalBlocks - 1}
+            sx={(theme) => ({ color: theme.semantic.label.alternative })}
+            onClick={() => onMove(block.id, "down")}
+          >
+            <IconChevronDown />
+          </IconButton>
+        </FlexBox>
+      </Box>
+
+      {/* 삭제 */}
+      <Box sx={{ padding: "14px 20px" }}>
+        <Button
+          variant="outlined"
+          color="assistive"
+          size="small"
+          fullWidth
+          sx={(theme) => ({
+            color: theme.semantic.status.negative,
+            borderColor: theme.semantic.status.negative,
+            "&:hover": { backgroundColor: "#FFF1F1" },
+          })}
+          onClick={() => onRemove(block.id)}
+        >
+          문항 삭제
+        </Button>
+      </Box>
+    </div>
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { GNB } from "@/components/gnb";
 import { AuthSessionProvider } from "@/components/session-provider";
+import { WDSProvider } from "@/components/wds-provider";
 
 export const metadata: Metadata = {
   title: "MaxDiff 설문조사",
@@ -14,12 +15,23 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ko">
-      <body className="bg-background min-h-screen">
-        <AuthSessionProvider>
-          <GNB />
-          {children}
-        </AuthSessionProvider>
+    <html lang="ko" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" />
+        <link
+          rel="stylesheet"
+          as="style"
+          crossOrigin="anonymous"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css"
+        />
+      </head>
+      <body>
+        <WDSProvider>
+          <AuthSessionProvider>
+            <GNB />
+            {children}
+          </AuthSessionProvider>
+        </WDSProvider>
       </body>
     </html>
   );

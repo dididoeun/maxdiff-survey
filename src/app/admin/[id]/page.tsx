@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import SurveyForm, { SurveyFormData } from "@/components/survey-form";
-import { Spinner } from "@/components/ui/spinner";
+import { Loading } from "@wanteddev/wds";
+import { PageContent } from "@/components/page-content";
 
 export default function EditSurveyPage() {
   const params = useParams();
@@ -33,18 +34,18 @@ export default function EditSurveyPage() {
 
   if (error) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-12 text-center">
+      <PageContent size="sm" className="py-12 text-center">
         <p className="text-destructive">{error}</p>
-      </div>
+      </PageContent>
     );
   }
 
   if (!surveyData) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-12 flex items-center justify-center gap-2">
-        <Spinner />
+      <PageContent size="sm" className="py-12 flex items-center justify-center gap-2">
+        <Loading variant="circular" size="20px" />
         <p className="text-muted-foreground">설문을 불러오는 중...</p>
-      </div>
+      </PageContent>
     );
   }
 

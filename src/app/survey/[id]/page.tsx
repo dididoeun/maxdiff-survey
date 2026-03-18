@@ -2,9 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Spinner } from "@/components/ui/spinner";
+import { Button, Loading, ProgressIndicator, TextArea, TextField, Typography } from "@wanteddev/wds";
+import { PageContent } from "@/components/page-content";
 
 interface SurveyItem {
   name: string;
@@ -76,7 +75,6 @@ export default function SurveyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // 일반 문항 응답
   const [generalAnswers, setGeneralAnswers] = useState<
     { questionId: string; answer: string | string[] }[]
   >([]);
@@ -104,10 +102,7 @@ export default function SurveyPage() {
         const set = sorted.slice(0, setSize);
         result.push(set);
         set.forEach((item) => {
-          exposureCount.set(
-            item.name,
-            (exposureCount.get(item.name) || 0) + 1
-          );
+          exposureCount.set(item.name, (exposureCount.get(item.name) || 0) + 1);
         });
       }
 
@@ -136,7 +131,6 @@ export default function SurveyPage() {
         }
         setSurvey(data);
         setSets(generateSets(data.items, data.setSize));
-        // 일반 문항 초기 응답값 세팅
         if (data.questions?.length > 0) {
           setGeneralAnswers(
             data.questions.map((q: Question) => ({
@@ -145,7 +139,6 @@ export default function SurveyPage() {
             }))
           );
         }
-        // 직군 없으면 바로 general 또는 maxdiff 단계로
         if (!data.jobRoles || data.jobRoles.length === 0) {
           if (data.questions?.length > 0) {
             setStage("general");
@@ -157,10 +150,7 @@ export default function SurveyPage() {
       .catch(() => setError("설문을 불러올 수 없습니다."));
   }, [surveyId, generateSets]);
 
-  const handleGeneralAnswer = (
-    questionId: string,
-    value: string | string[]
-  ) => {
+  const handleGeneralAnswer = (questionId: string, value: string | string[]) => {
     setGeneralAnswers((prev) =>
       prev.map((a) => (a.questionId === questionId ? { ...a, answer: value } : a))
     );
@@ -168,15 +158,13 @@ export default function SurveyPage() {
 
   const submitGeneralAnswers = async () => {
     if (!survey) return;
-    // 필수 문항 검증
     for (const q of survey.questions) {
       if (!q.required) continue;
       const ans = generalAnswers.find((a) => a.questionId === q.id);
       if (!ans) continue;
-      const isEmpty =
-        Array.isArray(ans.answer)
-          ? ans.answer.length === 0
-          : String(ans.answer).trim() === "";
+      const isEmpty = Array.isArray(ans.answer)
+        ? ans.answer.length === 0
+        : String(ans.answer).trim() === "";
       if (isEmpty) {
         setGeneralError(`"${q.title || "문항"}"은 필수 입력입니다.`);
         return;
@@ -237,39 +225,74 @@ export default function SurveyPage() {
 
   if (error) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-12 text-center">
-        <p className="text-red-500">{error}</p>
-      </div>
+      <PageContent size="sm" className="py-12 text-center">
+        <Typography
+          variant="body1"
+          sx={(theme) => ({ color: theme.semantic.status.negative })}
+        >
+          {error}
+        </Typography>
+      </PageContent>
     );
   }
 
   if (!survey || sets.length === 0) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-12 flex items-center justify-center gap-2">
-        <Spinner />
-        <p className="text-muted-foreground">설문을 불러오는 중...</p>
-      </div>
+      <PageContent size="sm" className="py-12 flex items-center justify-center gap-2">
+        <Loading variant="circular" size="24px" />
+        <Typography
+          variant="body2"
+          sx={(theme) => ({ color: theme.semantic.label.alternative })}
+        >
+          설문을 불러오는 중...
+        </Typography>
+      </PageContent>
     );
   }
 
   if (completed) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-12 text-center">
+      <PageContent size="sm" className="py-12 text-center">
         <img src="/success.svg" alt="" className="mx-auto mb-4" />
-        <h2 className="text-2xl font-semibold text-foreground">설문을 제출했어요!</h2>
-        <p className="text-muted-foreground mt-1">소중한 시간내어 참여해 주셔서 감사합니다.</p>
-      </div>
+        <Typography
+          variant="title3"
+          weight="bold"
+          sx={(theme) => ({ color: theme.semantic.label.normal, display: "block" })}
+        >
+          설문을 제출했어요!
+        </Typography>
+        <Typography
+          variant="body1"
+          sx={(theme) => ({ color: theme.semantic.label.alternative, marginTop: "4px", display: "block" })}
+        >
+          소중한 시간내어 참여해 주셔서 감사합니다.
+        </Typography>
+      </PageContent>
     );
   }
 
   // 직군 선택 화면
   if (stage === "job" && survey.jobRoles.length > 0) {
     return (
-      <div className="max-w-lg mx-auto px-4 py-12">
-        <h2 className="text-2xl font-semibold text-foreground">{survey.title}</h2>
-        <p className="text-muted-foreground mt-1 mb-6">
+      <PageContent size="sm" className="py-12">
+        <Typography
+          variant="title3"
+          weight="bold"
+          sx={(theme) => ({ color: theme.semantic.label.normal, display: "block" })}
+        >
+          {survey.title}
+        </Typography>
+        <Typography
+          variant="body2"
+          sx={(theme) => ({
+            color: theme.semantic.label.alternative,
+            marginTop: "4px",
+            marginBottom: "24px",
+            display: "block",
+          })}
+        >
           설문을 시작하기 전에 직군을 선택해주세요.
-        </p>
+        </Typography>
 
         <div className="space-y-2 mb-6" role="radiogroup">
           {survey.jobRoles.map((role) => (
@@ -299,12 +322,12 @@ export default function SurveyPage() {
             }
           }}
           disabled={!jobRole}
-          className="w-full h-10 px-3.5"
-          size="lg"
+          fullWidth
+          size="large"
         >
           설문 시작하기
         </Button>
-      </div>
+      </PageContent>
     );
   }
 
@@ -315,11 +338,14 @@ export default function SurveyPage() {
     const isLastSection = currentSectionIdx === sections.length - 1;
 
     const handleNextSection = async () => {
-      // 현재 섹션 필수 문항 검증
       for (const q of section.questions) {
         if (!q.required) continue;
         const ans = generalAnswers.find((a) => a.questionId === q.id);
-        const isEmpty = !ans || (Array.isArray(ans.answer) ? ans.answer.length === 0 : String(ans.answer).trim() === "");
+        const isEmpty =
+          !ans ||
+          (Array.isArray(ans.answer)
+            ? ans.answer.length === 0
+            : String(ans.answer).trim() === "");
         if (isEmpty) {
           setGeneralError(`"${q.title || "문항"}"은 필수 입력입니다.`);
           return;
@@ -335,18 +361,38 @@ export default function SurveyPage() {
     };
 
     return (
-      <div className="max-w-lg mx-auto px-4 py-12">
-        <h2 className="text-xl font-bold text-foreground mb-1">{survey.title}</h2>
+      <PageContent size="sm" className="py-12">
+        <Typography
+          variant="headline1"
+          weight="bold"
+          sx={(theme) => ({ color: theme.semantic.label.normal, display: "block", marginBottom: "4px" })}
+        >
+          {survey.title}
+        </Typography>
         {section.sectionTitle && (
-          <p className="text-base font-semibold text-foreground mt-4 mb-1">{section.sectionTitle}</p>
+          <Typography
+            variant="body1"
+            weight="bold"
+            sx={(theme) => ({ color: theme.semantic.label.normal, marginTop: "16px", marginBottom: "4px", display: "block" })}
+          >
+            {section.sectionTitle}
+          </Typography>
         )}
         {sections.length > 1 && (
-          <p className="text-xs text-muted-foreground mb-6">
+          <Typography
+            variant="caption1"
+            sx={(theme) => ({ color: theme.semantic.label.alternative, marginBottom: "24px", display: "block" })}
+          >
             {currentSectionIdx + 1} / {sections.length}
-          </p>
+          </Typography>
         )}
         {!section.sectionTitle && sections.length <= 1 && (
-          <p className="text-sm text-muted-foreground mb-6">사전 질문에 답해주세요.</p>
+          <Typography
+            variant="body2"
+            sx={(theme) => ({ color: theme.semantic.label.alternative, marginBottom: "24px", display: "block" })}
+          >
+            사전 질문에 답해주세요.
+          </Typography>
         )}
 
         <div className="space-y-8">
@@ -354,10 +400,16 @@ export default function SurveyPage() {
             const ans = generalAnswers.find((a) => a.questionId === q.id);
             return (
               <div key={q.id} className="space-y-3">
-                <p className="text-sm font-medium text-foreground">
+                <Typography
+                  variant="body2"
+                  weight="medium"
+                  sx={(theme) => ({ color: theme.semantic.label.normal, display: "block" })}
+                >
                   {q.title}
-                  {q.required && <span className="text-red-500 ml-0.5">*</span>}
-                </p>
+                  {q.required && (
+                    <span style={{ color: "red", marginLeft: "2px" }}>*</span>
+                  )}
+                </Typography>
 
                 {q.type === "multiple_choice" && (
                   <div className="space-y-2">
@@ -377,7 +429,9 @@ export default function SurveyPage() {
                             checked={isChecked}
                             onChange={() => {
                               if (q.multipleAnswers) {
-                                const prev = Array.isArray(ans?.answer) ? ans.answer : [];
+                                const prev = Array.isArray(ans?.answer)
+                                  ? ans.answer
+                                  : [];
                                 const next = prev.includes(opt)
                                   ? prev.filter((v) => v !== opt)
                                   : [...prev, opt];
@@ -396,22 +450,20 @@ export default function SurveyPage() {
                 )}
 
                 {q.type === "short_answer" && (
-                  <input
-                    type="text"
+                  <TextField
                     value={typeof ans?.answer === "string" ? ans.answer : ""}
                     onChange={(e) => handleGeneralAnswer(q.id, e.target.value)}
                     placeholder="답변을 입력하세요"
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                    width="100%"
                   />
                 )}
 
                 {q.type === "long_answer" && (
-                  <textarea
+                  <TextArea
                     value={typeof ans?.answer === "string" ? ans.answer : ""}
                     onChange={(e) => handleGeneralAnswer(q.id, e.target.value)}
                     placeholder="답변을 입력하세요"
-                    rows={4}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+                    sx={{ width: "100%", resize: "none" }}
                   />
                 )}
               </div>
@@ -419,15 +471,25 @@ export default function SurveyPage() {
           })}
         </div>
 
-        {generalError && <p className="mt-3 text-sm text-red-500">{generalError}</p>}
+        {generalError && (
+          <Typography
+            variant="body2"
+            sx={(theme) => ({ color: theme.semantic.status.negative, marginTop: "12px", display: "block" })}
+          >
+            {generalError}
+          </Typography>
+        )}
 
         <div className="flex gap-2 mt-6">
           {currentSectionIdx > 0 && (
             <Button
-              variant="outline"
-              onClick={() => { setGeneralError(""); setCurrentSectionIdx((i) => i - 1); }}
-              className="h-10"
-              size="lg"
+              variant="outlined"
+              color="assistive"
+              size="large"
+              onClick={() => {
+                setGeneralError("");
+                setCurrentSectionIdx((i) => i - 1);
+              }}
             >
               이전
             </Button>
@@ -435,13 +497,13 @@ export default function SurveyPage() {
           <Button
             onClick={handleNextSection}
             disabled={submitting}
-            className="flex-1 h-10"
-            size="lg"
+            size="large"
+            sx={{ flex: 1 }}
           >
-            {submitting ? "저장 중..." : isLastSection ? "다음" : "다음"}
+            {submitting ? "저장 중..." : "다음"}
           </Button>
         </div>
-      </div>
+      </PageContent>
     );
   }
 
@@ -450,16 +512,25 @@ export default function SurveyPage() {
   const progressValue = ((currentRound + 1) / sets.length) * 100;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8">
+    <PageContent className="py-8">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-foreground mb-1">
+        <Typography
+          variant="headline1"
+          weight="bold"
+          sx={(theme) => ({ color: theme.semantic.label.normal, marginBottom: "8px", display: "block" })}
+        >
           {survey.title}
-        </h1>
+        </Typography>
         <div className="flex items-center gap-3">
-          <p className="text-sm text-muted-foreground">
+          <Typography
+            variant="body2"
+            sx={(theme) => ({ color: theme.semantic.label.alternative, flexShrink: 0 })}
+          >
             {currentRound + 1} / {sets.length} 라운드
-          </p>
-          <Progress value={progressValue} className="flex-1" />
+          </Typography>
+          <div className="flex-1">
+            <ProgressIndicator percent={progressValue} />
+          </div>
         </div>
       </div>
 
@@ -467,9 +538,7 @@ export default function SurveyPage() {
         <p className="text-muted-foreground mb-5 text-sm">
           <span className="text-red-600 font-semibold">가장 시급한 것</span>{" "}
           1개와{" "}
-          <span className="text-green-600 font-semibold">
-            가장 덜 시급한 것
-          </span>{" "}
+          <span className="text-green-600 font-semibold">가장 덜 시급한 것</span>{" "}
           1개를 선택하세요.
         </p>
 
@@ -495,28 +564,24 @@ export default function SurveyPage() {
                 </p>
                 <div className="flex gap-2 mt-auto">
                   <Button
-                    variant="outline"
-                    size="sm"
-                    className={`flex-1 h-10 px-3.5 ${
-                      isBest
-                        ? "border-red-500 bg-red-50 text-red-600 hover:bg-red-100"
-                        : ""
-                    }`}
+                    variant="outlined"
+                    color="assistive"
+                    size="small"
+                    sx={isBest ? { borderColor: "#EF4444", backgroundColor: "#FEF2F2", color: "#DC2626", "&:hover": { backgroundColor: "#FEE2E2" } } : { flex: 1 }}
                     onClick={() => handleSelect(item.name, "best")}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><path d="M7.5 8 10 9"/><path d="m14 9 2.5-1"/><path d="M9 10h.01"/><path d="M15 10h.01"/></svg> 가장 시급
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><path d="M7.5 8 10 9"/><path d="m14 9 2.5-1"/><path d="M9 10h.01"/><path d="M15 10h.01"/></svg>{" "}
+                    가장 시급
                   </Button>
                   <Button
-                    variant="outline"
-                    size="sm"
-                    className={`flex-1 h-10 px-3.5 ${
-                      isWorst
-                        ? "border-green-500 bg-green-50 text-green-600 hover:bg-green-100"
-                        : ""
-                    }`}
+                    variant="outlined"
+                    color="assistive"
+                    size="small"
+                    sx={isWorst ? { borderColor: "#22C55E", backgroundColor: "#F0FDF4", color: "#16A34A", "&:hover": { backgroundColor: "#DCFCE7" } } : { flex: 1 }}
                     onClick={() => handleSelect(item.name, "worst")}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></svg> 가장 덜 시급
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></svg>{" "}
+                    가장 덜 시급
                   </Button>
                 </div>
               </div>
@@ -528,8 +593,8 @@ export default function SurveyPage() {
       <Button
         onClick={submitRound}
         disabled={!best || !worst || submitting}
-        className="w-full h-10 px-3.5"
-        size="lg"
+        fullWidth
+        size="large"
       >
         {submitting
           ? "제출 중..."
@@ -537,6 +602,6 @@ export default function SurveyPage() {
           ? "다음 라운드"
           : "설문 완료"}
       </Button>
-    </div>
+    </PageContent>
   );
 }
