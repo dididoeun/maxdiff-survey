@@ -138,7 +138,7 @@ export default function DashboardsPage() {
                     backgroundColor: theme.semantic.fill.normal,
                   },
                 })}
-                onClick={() => router.push(`/dashboard/${s.id}`)}
+                onClick={() => router.push(`/admin/${s.id}`)}
               >
                 {/* 제목 */}
                 <FlexBox

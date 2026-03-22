@@ -454,50 +454,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
   // ── 3-패널 에디터 ─────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 60px)" }}>
-
-      {/* ── 상단 헤더 ── */}
-      <Box
-        sx={(theme) => ({
-          flexShrink: 0,
-          height: "52px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          paddingLeft: "20px",
-          paddingRight: "20px",
-          backgroundColor: theme.semantic.background.normal.normal,
-          borderBottom: `1px solid ${theme.semantic.line.solid.normal}`,
-        })}
-      >
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="설문 제목 없음"
-          style={{
-            border: "none",
-            outline: "none",
-            fontWeight: 600,
-            fontSize: "14px",
-            background: "transparent",
-            color: "inherit",
-            flex: 1,
-            minWidth: 0,
-            marginRight: "16px",
-          }}
-        />
-        <FlexBox gap="8px" sx={{ flexShrink: 0 }}>
-          <Button
-            variant="solid"
-            color="primary"
-            size="small"
-            disabled={savingType !== null}
-            onClick={() => submitSurvey("published")}
-          >
-            {savingType === "published" ? "저장 중..." : "설문 생성하기"}
-          </Button>
-        </FlexBox>
-      </Box>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 
       {/* ── 3-패널 본문 ── */}
       <Box
@@ -674,30 +631,26 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
               padding: "40px 32px",
             }}
           >
-            <div style={{ width: "100%", maxWidth: "520px" }}>
-<div style={{ border: "1px solid #E5E7EB", borderRadius: "20px", padding: "60px", opacity: 0.6 }}>
-              {selectedBlock ? (
-                <CenterEditor
-                  block={selectedBlock}
-                  idx={selectedIdx}
-                  uploading={uploading}
-                  onUpdate={updateBlock}
-                  onAddItem={addItem}
-                  onRemoveItem={removeItem}
-                  onImageUpload={handleImageUpload}
-                  onAddOption={addOption}
-                  onUpdateOption={updateOption}
-                  onRemoveOption={removeOption}
-                />
-              ) : (
-                <FlexBox alignItems="center" justifyContent="center" sx={{ minHeight: "120px" }}>
-                  <Typography variant="body2" sx={(theme) => ({ color: theme.semantic.label.alternative })}>
-                    왼쪽에서 문항을 선택하거나 추가하세요
-                  </Typography>
-                </FlexBox>
-              )}
-            </div>
-            </div>
+            {selectedBlock ? (
+              <CenterEditor
+                block={selectedBlock}
+                idx={selectedIdx}
+                uploading={uploading}
+                onUpdate={updateBlock}
+                onAddItem={addItem}
+                onRemoveItem={removeItem}
+                onImageUpload={handleImageUpload}
+                onAddOption={addOption}
+                onUpdateOption={updateOption}
+                onRemoveOption={removeOption}
+              />
+            ) : (
+              <FlexBox alignItems="center" justifyContent="center" sx={{ minHeight: "120px" }}>
+                <Typography variant="body2" sx={(theme) => ({ color: theme.semantic.label.alternative })}>
+                  왼쪽에서 문항을 선택하거나 추가하세요
+                </Typography>
+              </FlexBox>
+            )}
           </div>
         </div>
 

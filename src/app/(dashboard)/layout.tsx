@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Avatar, AvatarButton, Box, Button, FlexBox, Menu, MenuContent, MenuItem, MenuList, MenuTrigger } from "@wanteddev/wds";
 
@@ -9,14 +10,22 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   const { data: session, status } = useSession();
+
+  // admin/[id] 페이지는 자체 GNB를 사용
+  const isEditorPage = /^\/admin\/[^/]+$/.test(pathname);
+
+  if (isEditorPage) {
+    return <>{children}</>;
+  }
 
   return (
     <div style={{ minHeight: "100vh" }}>
       {/* GNB */}
       <Box
         as="header"
-        sx={(theme) => ({
+        sx={() => ({
           position: "sticky",
           top: 0,
           zIndex: 50,
