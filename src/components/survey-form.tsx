@@ -13,8 +13,6 @@ import {
   MenuList,
   MenuTrigger,
   Option,
-  ProgressTracker,
-  ProgressTrackerItem,
   Select,
   Switch,
   TextField,
@@ -22,8 +20,6 @@ import {
 } from "@wanteddev/wds";
 import {
   IconAlignJustify,
-  IconChevronDown,
-  IconChevronUp,
   IconCircleCheck,
   IconClose,
   IconEye,
@@ -458,7 +454,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
   // ── 3-패널 에디터 ─────────────────────────────────────────────────────────
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 48px)" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 60px)" }}>
 
       {/* ── 상단 헤더 ── */}
       <Box
@@ -491,15 +487,6 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
           }}
         />
         <FlexBox gap="8px" sx={{ flexShrink: 0 }}>
-          <Button
-            variant="outlined"
-            color="assistive"
-            size="small"
-            disabled={savingType !== null}
-            onClick={() => submitSurvey("draft")}
-          >
-            {savingType === "draft" ? "저장 중..." : "임시저장"}
-          </Button>
           <Button
             variant="solid"
             color="primary"
@@ -593,66 +580,88 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
           }}
         >
           {/* 툴바 래퍼 — 중앙 배치 */}
-          <div style={{ flexShrink: 0, display: "flex", justifyContent: "center", padding: "12px 16px" }}>
-          <Box
-            sx={(theme) => ({
+          <div style={{ flexShrink: 0, display: "flex", justifyContent: "center", padding: "8px 16px" }}>
+            <div style={{
               display: "flex",
               alignItems: "center",
-              gap: "8px",
-              padding: "8px 12px",
-              backgroundColor: theme.semantic.background.normal.alternative,
-              width: "fit-content",
+              border: "1px solid rgba(112,115,124,0.08)",
               borderRadius: "12px",
-            })}
-          >
-            {/* 문항 추가 */}
-            <Menu>
-              <MenuTrigger>
+              overflow: "hidden",
+            }}>
+              {/* 왼쪽 섹션: 문항 추가 */}
+              <Box
+                sx={(theme) => ({
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "8px",
+                  backgroundColor: theme.semantic.background.normal.alternative,
+                  borderRight: "1px solid rgba(112,115,124,0.08)",
+                })}
+              >
+                <Menu>
+                  <MenuTrigger>
+                    <Button
+                      variant="solid"
+                      color="primary"
+                      size="small"
+                      leadingContent={<IconPlus />}
+                    >
+                      문항 추가
+                    </Button>
+                  </MenuTrigger>
+                  <MenuContent>
+                    <MenuList>
+                      {ADD_OPTIONS.map((type) => (
+                        <MenuItem key={type} value={type} onClick={() => addBlock(type)}>
+                          <FlexBox alignItems="center" gap="8px">
+                            <div style={{
+                              width: 20, height: 20, borderRadius: 4,
+                              backgroundColor: BLOCK_TYPE_STYLE[type].bg,
+                              color: BLOCK_TYPE_STYLE[type].color,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}>
+                              <div style={{ width: 12, height: 12 }}>{BLOCK_TYPE_ICONS[type]}</div>
+                            </div>
+                            {BLOCK_TYPE_LABELS[type]}
+                          </FlexBox>
+                        </MenuItem>
+                      ))}
+                    </MenuList>
+                  </MenuContent>
+                </Menu>
+              </Box>
+
+              {/* 오른쪽 섹션: 미리보기 + 임시저장 */}
+              <Box
+                sx={(theme) => ({
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px",
+                  backgroundColor: theme.semantic.background.normal.alternative,
+                })}
+              >
                 <Button
-                  variant="solid"
-                  color="primary"
+                  variant="outlined"
+                  color="assistive"
                   size="small"
-                  leadingContent={<IconPlus />}
+                  disabled={!surveyId}
+                  leadingContent={<IconEye />}
+                  onClick={() => surveyId && window.open(`/survey/${surveyId}`, "_blank")}
                 >
-                  문항 추가
+                  미리보기
                 </Button>
-              </MenuTrigger>
-              <MenuContent>
-                <MenuList>
-                  {ADD_OPTIONS.map((type) => (
-                    <MenuItem key={type} value={type} onClick={() => addBlock(type)}>
-                      <FlexBox alignItems="center" gap="8px">
-                        <div style={{
-                          width: 20, height: 20, borderRadius: 4,
-                          backgroundColor: BLOCK_TYPE_STYLE[type].bg,
-                          color: BLOCK_TYPE_STYLE[type].color,
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                        }}>
-                          <div style={{ width: 12, height: 12 }}>{BLOCK_TYPE_ICONS[type]}</div>
-                        </div>
-                        {BLOCK_TYPE_LABELS[type]}
-                      </FlexBox>
-                    </MenuItem>
-                  ))}
-                </MenuList>
-              </MenuContent>
-            </Menu>
-
-            {/* 구분선 */}
-            <div style={{ width: 1, height: 20, backgroundColor: "#E5E7EB" }} />
-
-            {/* 미리보기 */}
-            <Button
-              variant="outlined"
-              color="assistive"
-              size="small"
-              disabled={!surveyId}
-              leadingContent={<IconEye />}
-              onClick={() => surveyId && window.open(`/survey/${surveyId}`, "_blank")}
-            >
-              미리보기
-            </Button>
-          </Box>
+                <Button
+                  variant="outlined"
+                  color="assistive"
+                  size="small"
+                  disabled={savingType !== null}
+                  onClick={() => submitSurvey("draft")}
+                >
+                  {savingType === "draft" ? "저장 중..." : "임시저장"}
+                </Button>
+              </Box>
+            </div>
           </div>
 
           {/* 에디터 콘텐츠 */}
@@ -666,11 +675,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
             }}
           >
             <div style={{ width: "100%", maxWidth: "520px" }}>
-              {/* 섹션 Progress Tracker */}
-              {blocks.some((b) => b.type === "section") && (
-                <SurveyProgressTracker blocks={blocks} selectedId={selectedId} onSelect={setSelectedId} />
-              )}
-            <div style={{ border: "1px solid #E5E7EB", borderRadius: "8px", padding: "60px 52px" }}>
+<div style={{ border: "1px solid #E5E7EB", borderRadius: "20px", padding: "60px", opacity: 0.6 }}>
               {selectedBlock ? (
                 <CenterEditor
                   block={selectedBlock}
@@ -727,64 +732,6 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         </Box>
       </Box>
     </div>
-  );
-}
-
-// ── Progress Tracker ─────────────────────────────────────────────────────────
-
-interface SurveyProgressTrackerProps {
-  blocks: Block[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}
-
-function SurveyProgressTracker({ blocks, selectedId, onSelect }: SurveyProgressTrackerProps) {
-  // 섹션을 경계로 페이지 그룹 생성 (N 섹션 = N+1 페이지)
-  const pages: { label: string; jumpToId: string }[] = [];
-
-  const firstNonSection = blocks.find((b) => b.type !== "section");
-  if (firstNonSection) {
-    pages.push({ label: "1페이지", jumpToId: firstNonSection.id });
-  }
-
-  blocks.forEach((b, i) => {
-    if (b.type === "section") {
-      const nextBlock = blocks[i + 1] ?? b;
-      pages.push({
-        label: (b as SectionBlock).title || `${pages.length + 1}페이지`,
-        jumpToId: nextBlock.id,
-      });
-    }
-  });
-
-  // 현재 선택된 블록이 속한 페이지 인덱스
-  const currentPageIdx = (() => {
-    if (!selectedId) return 0;
-    const selectedPos = blocks.findIndex((b) => b.id === selectedId);
-    let pageIdx = 0;
-    for (let i = 0; i < selectedPos; i++) {
-      if (blocks[i].type === "section") pageIdx++;
-    }
-    return pageIdx;
-  })();
-
-  return (
-    <ProgressTracker
-      value={String(currentPageIdx)}
-      onValueChange={(val) => {
-        const idx = Number(val);
-        if (pages[idx]) onSelect(pages[idx].jumpToId);
-      }}
-      sx={{ marginBottom: "20px" }}
-    >
-      {pages.map((page, idx) => (
-        <ProgressTrackerItem
-          key={page.jumpToId}
-          value={String(idx)}
-          label={page.label}
-        />
-      ))}
-    </ProgressTracker>
   );
 }
 
@@ -982,7 +929,7 @@ function CenterEditor(props: CenterEditorProps) {
           style={{
             fontSize: "16px",
             fontWeight: 600,
-            color: "#6366F1",
+            color: "#0066FF",
             flexShrink: 0,
             lineHeight: "1.6",
             paddingTop: "2px",
@@ -1244,14 +1191,7 @@ function RightSettings({ block, idx, totalBlocks, onUpdate, onChangeType, onRemo
             borderBottom: `1px solid ${theme.semantic.line.solid.normal}`,
           })}
         >
-          <Typography
-            variant="caption1"
-            weight="bold"
-            sx={(theme) => ({ color: theme.semantic.label.normal, display: "block", marginBottom: "10px" })}
-          >
-            답변
-          </Typography>
-          <Select
+            <Select
             value={block.type}
             onChange={(value) => onChangeType(block.id, value as Block["type"])}
             width="100%"
@@ -1359,58 +1299,26 @@ function RightSettings({ block, idx, totalBlocks, onUpdate, onChangeType, onRemo
         </FlexBox>
       )}
 
-      {/* 순서 변경 / 삭제 */}
-      <Box
-        sx={(theme) => ({
-          padding: "14px 20px",
-          borderBottom: `1px solid ${theme.semantic.line.solid.normal}`,
-        })}
-      >
-        <Typography
-          variant="caption1"
-          weight="bold"
-          sx={(theme) => ({ color: theme.semantic.label.normal, display: "block", marginBottom: "10px" })}
-        >
-          순서 변경
-        </Typography>
-        <FlexBox gap="8px">
-          <IconButton
-            size={32}
-            title="위로"
-            disabled={idx === 0}
-            sx={(theme) => ({ color: theme.semantic.label.alternative })}
-            onClick={() => onMove(block.id, "up")}
-          >
-            <IconChevronUp />
-          </IconButton>
-          <IconButton
-            size={32}
-            title="아래로"
-            disabled={idx === totalBlocks - 1}
-            sx={(theme) => ({ color: theme.semantic.label.alternative })}
-            onClick={() => onMove(block.id, "down")}
-          >
-            <IconChevronDown />
-          </IconButton>
-        </FlexBox>
-      </Box>
 
       {/* 삭제 */}
-      <Box sx={{ padding: "14px 20px" }}>
-        <Button
-          variant="outlined"
-          color="assistive"
-          size="small"
-          fullWidth
-          sx={(theme) => ({
-            color: theme.semantic.status.negative,
-            borderColor: theme.semantic.status.negative,
-            "&:hover": { backgroundColor: "#FFF1F1" },
-          })}
+      <Box sx={{ padding: "14px 20px", display: "flex", justifyContent: "center" }}>
+        <button
           onClick={() => onRemove(block.id)}
+          style={{
+            border: "none",
+            background: "none",
+            cursor: "pointer",
+            color: "#FF4242",
+            fontSize: "13px",
+            fontFamily: "inherit",
+            padding: "7px 14px",
+            borderRadius: "8px",
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#FFF1F1"; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
         >
           문항 삭제
-        </Button>
+        </button>
       </Box>
     </div>
   );

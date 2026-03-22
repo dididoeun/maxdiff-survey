@@ -22,7 +22,6 @@ import {
   Typography,
 } from "@wanteddev/wds";
 import { IconClose, IconCopy, IconDownload } from "@wanteddev/wds-icon";
-import { PageContent } from "@/components/page-content";
 import {
   BarChart,
   Bar,
@@ -319,27 +318,27 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <PageContent className="py-12 text-center">
+      <div className="px-8 py-12 text-center max-w-4xl">
         <Typography
           variant="body1"
           sx={(theme) => ({ color: theme.semantic.status.negative })}
         >
           {error}
         </Typography>
-      </PageContent>
+      </div>
     );
   }
 
   if (!survey) {
     return (
-      <PageContent className="py-12 text-center">
+      <div className="px-8 py-12 text-center max-w-4xl">
         <Typography
           variant="body1"
           sx={(theme) => ({ color: theme.semantic.label.alternative })}
         >
           로딩 중...
         </Typography>
-      </PageContent>
+      </div>
     );
   }
 
@@ -353,7 +352,7 @@ export default function DashboardPage() {
   const QUADRANT_COLORS = ["#10B981", "#F59E0B", "#3B82F6", "#9CA3AF"];
 
   return (
-    <PageContent className="py-8">
+    <div className="px-8 py-8 max-w-4xl">
       {/* 헤더 */}
       <div className="mb-8">
         <Typography
@@ -882,6 +881,6 @@ export default function DashboardPage() {
           </div>
         </Box>
       )}
-    </PageContent>
+    </div>
   );
 }

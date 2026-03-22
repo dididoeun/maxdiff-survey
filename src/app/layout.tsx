@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { GNB } from "@/components/gnb";
 import { AuthSessionProvider } from "@/components/session-provider";
 import { WDSProvider } from "@/components/wds-provider";
 
@@ -17,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="ko" suppressHydrationWarning>
       <head>
+        <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
         <link rel="preconnect" href="https://cdn.jsdelivr.net" />
         <link
           rel="stylesheet"
@@ -28,7 +28,6 @@ export default function RootLayout({
       <body>
         <WDSProvider>
           <AuthSessionProvider>
-            <GNB />
             {children}
           </AuthSessionProvider>
         </WDSProvider>
