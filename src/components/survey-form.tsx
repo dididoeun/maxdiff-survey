@@ -140,6 +140,14 @@ const BLOCK_TYPE_STYLE: Record<Block["type"], { bg: string; color: string }> = {
   section:         { bg: "#F9FAFB", color: "#9CA3AF" },
 };
 
+const BLOCK_TYPE_ACCENT_COLOR: Record<Block["type"], string> = {
+  multiple_choice: "semantic.accent.foreground.cyan",
+  short_answer:    "semantic.accent.foreground.violet",
+  long_answer:     "semantic.accent.foreground.pink",
+  maxdiff:         "semantic.accent.foreground.green",
+  section:         "",
+};
+
 const ADD_OPTIONS: Exclude<Block["type"], "section">[] = [
   "maxdiff",
   "multiple_choice",
@@ -490,7 +498,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "12px", flex: 1, overflowY: "auto" }}>
             {/* 문항 추가 버튼 */}
-            <Menu>
+            <Menu value="" onValueChange={() => {}}>
               <MenuTrigger>
                 <Button
                   variant="outlined"
@@ -502,20 +510,18 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
                   문항 추가
                 </Button>
               </MenuTrigger>
-              <MenuContent>
+              <MenuContent sx={{ borderRadius: "16px", width: "100%", minWidth: "unset" }}>
                 <MenuList>
                   {ADD_OPTIONS.map((type) => (
-                    <MenuItem key={type} value={type} onClick={() => addBlock(type)}>
-                      <FlexBox alignItems="center" gap="8px">
-                        <ContentBadge
-                          leadingContent={BLOCK_TYPE_ICONS[type]}
-                          color="accent"
-                          size="small"
-                          variant="solid"
-                        >
-                          {BLOCK_TYPE_LABELS[type]}
-                        </ContentBadge>
-                      </FlexBox>
+                    <MenuItem
+                      key={type}
+                      value={type}
+                      verticalPadding="small"
+                      onClick={() => addBlock(type)}
+                      leadingContent={BLOCK_TYPE_ICONS[type]}
+                      sx={{ alignItems: "center" }}
+                    >
+                      {BLOCK_TYPE_LABELS[type]}
                     </MenuItem>
                   ))}
                 </MenuList>
@@ -745,7 +751,8 @@ function QuestionListItem({
       {/* 타입 뱃지 */}
       <ContentBadge
         leadingContent={BLOCK_TYPE_ICONS[block.type]}
-        color="accent"
+        color={block.type === "section" ? "neutral" : "accent"}
+        accentColor={BLOCK_TYPE_ACCENT_COLOR[block.type] as any}
         size="small"
         variant="solid"
       >
