@@ -751,7 +751,7 @@ function QuestionListItem({
       {/* 타입 뱃지 */}
       <ContentBadge
         leadingContent={BLOCK_TYPE_ICONS[block.type]}
-        color={block.type === "section" ? "neutral" : "accent"}
+        color="accent"
         accentColor={BLOCK_TYPE_ACCENT_COLOR[block.type] as any}
         size="small"
         variant="solid"
