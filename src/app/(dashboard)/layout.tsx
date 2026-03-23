@@ -13,8 +13,8 @@ export default function DashboardLayout({
   const pathname = usePathname();
   const { data: session, status } = useSession();
 
-  // admin/[id] 페이지는 자체 GNB를 사용
-  const isEditorPage = /^\/admin\/[^/]+$/.test(pathname);
+  // admin 페이지는 자체 GNB를 사용
+  const isEditorPage = /^\/admin(\/[^/]+)?$/.test(pathname);
 
   if (isEditorPage) {
     return <>{children}</>;

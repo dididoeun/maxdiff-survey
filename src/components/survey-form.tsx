@@ -471,6 +471,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
           gap: "20px",
           padding: "20px",
           backgroundColor: theme.semantic.background.normal.normal,
+          minHeight: 0,
         })}
       >
 
@@ -570,100 +571,16 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
             overflow: "hidden",
           }}
         >
-          {/* 툴바 래퍼 — 중앙 배치 */}
-          <div style={{ flexShrink: 0, display: "flex", justifyContent: "center", padding: "8px 16px" }}>
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              border: "1px solid rgba(112,115,124,0.08)",
-              borderRadius: "12px",
-              overflow: "hidden",
-            }}>
-              {/* 왼쪽 섹션: 문항 추가 */}
-              <Box
-                sx={(theme) => ({
-                  display: "flex",
-                  alignItems: "center",
-                  padding: "8px",
-                  backgroundColor: theme.semantic.background.normal.alternative,
-                  borderRight: "1px solid rgba(112,115,124,0.08)",
-                })}
-              >
-                <Menu>
-                  <MenuTrigger>
-                    <Button
-                      variant="solid"
-                      color="primary"
-                      size="small"
-                      leadingContent={<IconPlus />}
-                    >
-                      문항 추가
-                    </Button>
-                  </MenuTrigger>
-                  <MenuContent>
-                    <MenuList>
-                      {ADD_OPTIONS.map((type) => (
-                        <MenuItem key={type} value={type} onClick={() => addBlock(type)}>
-                          <FlexBox alignItems="center" gap="8px">
-                            <div style={{
-                              width: 20, height: 20, borderRadius: 4,
-                              backgroundColor: BLOCK_TYPE_STYLE[type].bg,
-                              color: BLOCK_TYPE_STYLE[type].color,
-                              display: "flex", alignItems: "center", justifyContent: "center",
-                            }}>
-                              <div style={{ width: 12, height: 12 }}>{BLOCK_TYPE_ICONS[type]}</div>
-                            </div>
-                            {BLOCK_TYPE_LABELS[type]}
-                          </FlexBox>
-                        </MenuItem>
-                      ))}
-                    </MenuList>
-                  </MenuContent>
-                </Menu>
-              </Box>
-
-              {/* 오른쪽 섹션: 미리보기 + 임시저장 */}
-              <Box
-                sx={(theme) => ({
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px",
-                  backgroundColor: theme.semantic.background.normal.alternative,
-                })}
-              >
-                <Button
-                  variant="outlined"
-                  color="assistive"
-                  size="small"
-                  disabled={!surveyId}
-                  leadingContent={<IconEye />}
-                  onClick={() => surveyId && window.open(`/survey/${surveyId}`, "_blank")}
-                >
-                  미리보기
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="assistive"
-                  size="small"
-                  disabled={savingType !== null}
-                  onClick={() => submitSurvey("draft")}
-                >
-                  {savingType === "draft" ? "저장 중..." : "임시저장"}
-                </Button>
-              </Box>
-            </div>
-          </div>
-
           {/* 에디터 콘텐츠 */}
           <div
             style={{
               flex: 1,
+              minHeight: 0,
               overflowY: "auto",
               display: "flex",
-              justifyContent: "center",
-              alignItems: "flex-start",
-              padding: "40px 32px",
+              flexDirection: "column",
+              alignItems: "center",
+              padding: "0 32px",
             }}
           >
             {selectedBlock ? (

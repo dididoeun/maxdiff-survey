@@ -87,7 +87,7 @@ export default function EditSurveyPage() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Editor GNB */}
       <Box
         as="header"
@@ -194,9 +194,9 @@ export default function EditSurveyPage() {
       </Box>
 
       {/* Content */}
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minHeight: 0 }}>
         {activeTab === "questions" && (
-          <div style={{ height: "calc(100vh - 60px)" }}>
+          <div style={{ height: "100%" }}>
             <SurveyForm mode="edit" initialData={surveyData} surveyId={surveyId} />
           </div>
         )}
