@@ -580,7 +580,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              padding: "0 32px",
+              padding: 0,
             }}
           >
             {selectedBlock ? (

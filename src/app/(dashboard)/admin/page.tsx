@@ -43,24 +43,24 @@ export default function AdminPage() {
           sx={{ padding: "0 20px", height: "100%", position: "relative" }}
         >
           {/* Leading: Breadcrumb */}
-          <FlexBox alignItems="center" gap="6px">
+          <FlexBox alignItems="center" gap="4px">
             <TextButton
               as={Link}
               href="/dashboards"
               leadingContent={<IconHomeFill />}
               color="assistive"
-              size="medium"
+              size="small"
             >
               전체
             </TextButton>
             <IconChevronRightSmall
               sx={(theme) => ({
-                fontSize: "16px",
+                fontSize: "14px",
                 color: theme.semantic.label.alternative,
               })}
             />
             <Typography
-              variant="body1"
+              variant="label1"
               weight="bold"
               sx={(theme) => ({ color: theme.semantic.label.alternative })}
             >
