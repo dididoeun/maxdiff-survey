@@ -149,24 +149,26 @@ export default function EditSurveyPage() {
 
           {/* Trailing: Actions */}
           <FlexBox alignItems="center" gap="16px">
-            <FlexBox alignItems="center" gap="8px">
-              <Button variant="outlined" color="assistive" size="small">
-                공유
-              </Button>
-              <Button variant="outlined" color="assistive" size="small">
-                임시저장
+            <FlexBox alignItems="center" gap="10px">
+              <FlexBox alignItems="center" gap="8px">
+                <Button variant="outlined" color="assistive" size="small">
+                  공유
+                </Button>
+                <Button variant="outlined" color="assistive" size="small">
+                  임시저장
+                </Button>
+              </FlexBox>
+              <Box
+                sx={(theme) => ({
+                  width: "1px",
+                  height: "20px",
+                  backgroundColor: theme.semantic.line.solid.normal,
+                })}
+              />
+              <Button variant="solid" color="primary" size="small">
+                발행하기
               </Button>
             </FlexBox>
-            <Box
-              sx={(theme) => ({
-                width: "1px",
-                height: "20px",
-                backgroundColor: theme.semantic.line.solid.normal,
-              })}
-            />
-            <Button variant="solid" color="primary" size="small">
-              발행하기
-            </Button>
             {status === "loading" ? null : session?.user ? (
               <Menu>
                 <MenuTrigger>
