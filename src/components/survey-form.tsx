@@ -497,37 +497,6 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
           })}
         >
           <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "12px", flex: 1, overflowY: "auto" }}>
-            {/* 문항 추가 버튼 */}
-            <Menu value="" onValueChange={() => {}}>
-              <MenuTrigger>
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  size="large"
-                  fullWidth
-                  leadingContent={<IconCirclePlusFill />}
-                >
-                  문항 추가
-                </Button>
-              </MenuTrigger>
-              <MenuContent sx={{ borderRadius: "16px", width: "100%", minWidth: "unset" }}>
-                <MenuList>
-                  {ADD_OPTIONS.map((type) => (
-                    <MenuItem
-                      key={type}
-                      value={type}
-                      verticalPadding="small"
-                      onClick={() => addBlock(type)}
-                      leadingContent={BLOCK_TYPE_ICONS[type]}
-                      sx={{ alignItems: "center" }}
-                    >
-                      {BLOCK_TYPE_LABELS[type]}
-                    </MenuItem>
-                  ))}
-                </MenuList>
-              </MenuContent>
-            </Menu>
-
             {/* 문항 목록 */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -551,7 +520,7 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
                 </SortableContext>
               </DndContext>
 
-              {/* 섹션 추가 */}
+              {/* 섹션 추가 + 문항 추가 */}
               <FlexBox alignItems="center" gap="8px" sx={{ padding: "8px 0" }}>
                 <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
                 <Button
@@ -559,9 +528,40 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
                   color="assistive"
                   size="small"
                   onClick={() => addBlock("section")}
+                  leadingContent={<IconCirclePlusFill />}
+                  sx={(theme) => ({ backgroundColor: theme.semantic.background.normal.normal })}
                 >
-                  섹션추가
+                  섹션
                 </Button>
+                <Menu value="" onValueChange={() => {}}>
+                  <MenuTrigger>
+                    <Button
+                      variant="outlined"
+                      color="assistive"
+                      size="small"
+                      leadingContent={<IconCirclePlusFill />}
+                      sx={(theme) => ({ backgroundColor: theme.semantic.background.normal.normal })}
+                    >
+                      문항
+                    </Button>
+                  </MenuTrigger>
+                  <MenuContent disablePortal sx={{ borderRadius: "16px", minWidth: "unset" }}>
+                    <MenuList>
+                      {ADD_OPTIONS.map((type) => (
+                        <MenuItem
+                          key={type}
+                          value={type}
+                          verticalPadding="small"
+                          onClick={() => addBlock(type)}
+                          leadingContent={BLOCK_TYPE_ICONS[type]}
+                          sx={{ alignItems: "center" }}
+                        >
+                          {BLOCK_TYPE_LABELS[type]}
+                        </MenuItem>
+                      ))}
+                    </MenuList>
+                  </MenuContent>
+                </Menu>
                 <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
               </FlexBox>
             </div>
@@ -695,6 +695,8 @@ function QuestionListItem({
         alignItems="center"
         gap="8px"
         onClick={onSelect}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         sx={(theme) => ({
           padding: "6px 0",
           cursor: "pointer",
@@ -711,6 +713,26 @@ function QuestionListItem({
         >
           {block.title || "섹션"}
         </Typography>
+        {hovered && (
+          <Box
+            as="button"
+            onClick={(e: React.MouseEvent) => { e.stopPropagation(); onRemove(block.id); }}
+            sx={(theme) => ({
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              border: "none",
+              background: "none",
+              cursor: "pointer",
+              color: theme.semantic.label.alternative,
+              padding: 0,
+              flexShrink: 0,
+              "&:hover": { color: theme.semantic.status.negative },
+            })}
+          >
+            <IconClose style={{ width: 14, height: 14 }} />
+          </Box>
+        )}
         <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
       </FlexBox>
     );
@@ -1021,7 +1043,7 @@ function CenterEditor(props: CenterEditorProps) {
               placeholder="항목 이름 입력 후 추가"
               width="100%"
             />
-            <Button type="submit" variant="outlined" color="assistive" size="small" sx={{ flexShrink: 0 }}>
+            <Button type="submit" variant="outlined" color="primary" size="large" sx={{ flexShrink: 0 }}>
               추가
             </Button>
           </form>
