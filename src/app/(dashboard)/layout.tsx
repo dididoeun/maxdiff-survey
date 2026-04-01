@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { Avatar, AvatarButton, Box, Button, FlexBox, Menu, MenuContent, MenuItem, MenuList, MenuTrigger } from "@wanteddev/wds";
 
@@ -11,12 +11,14 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
 
-  // admin 페이지는 자체 GNB를 사용
+  // admin 페이지는 자체 GNB를 사용, embed 모드에서도 GNB 숨김
   const isEditorPage = /^\/admin(\/[^/]+)?$/.test(pathname);
+  const isEmbed = searchParams.get("embed") === "1";
 
-  if (isEditorPage) {
+  if (isEditorPage || isEmbed) {
     return <>{children}</>;
   }
 

@@ -478,6 +478,9 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
           overflow: "hidden",
           gap: "20px",
           padding: "20px",
+          maxWidth: "1400px",
+          margin: "0 auto",
+          width: "100%",
           backgroundColor: theme.semantic.background.normal.normal,
           minHeight: 0,
         })}

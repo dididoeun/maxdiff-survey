@@ -318,7 +318,7 @@ export default function DashboardPage() {
 
   if (error) {
     return (
-      <div className="px-8 py-12 text-center max-w-4xl">
+      <div className="px-8 py-12 text-center max-w-4xl mx-auto">
         <Typography
           variant="body1"
           sx={(theme) => ({ color: theme.semantic.status.negative })}
@@ -331,7 +331,7 @@ export default function DashboardPage() {
 
   if (!survey) {
     return (
-      <div className="px-8 py-12 text-center max-w-4xl">
+      <div className="px-8 py-12 text-center max-w-4xl mx-auto">
         <Typography
           variant="body1"
           sx={(theme) => ({ color: theme.semantic.label.alternative })}
@@ -352,39 +352,18 @@ export default function DashboardPage() {
   const QUADRANT_COLORS = ["#10B981", "#F59E0B", "#3B82F6", "#9CA3AF"];
 
   return (
-    <div className="px-8 py-8 max-w-4xl">
+    <div style={{ maxWidth: "1400px", margin: "0 auto", padding: "32px 20px" }}>
       {/* 헤더 */}
-      <div className="mb-8">
-        <Typography
-          variant="title3"
-          weight="bold"
-          sx={(theme) => ({ color: theme.semantic.label.normal, marginBottom: "8px", display: "block" })}
-        >
-          {survey.title}
-        </Typography>
+      <div>
         <Typography
           variant="body2"
           sx={(theme) => ({ color: theme.semantic.label.alternative })}
         >
           총 응답자 {respondentCount}명 · 항목 {survey.items.length}개
         </Typography>
-        <FlexBox alignItems="center" gap="8px" sx={{ marginTop: "12px" }}>
-          <TextField
-            readOnly
-            value={surveyUrl}
-            sx={{ flex: 1 }}
-          />
-          <Button
-            variant="outlined"
-            color="assistive"
-            size="small"
-            leadingContent={<IconCopy sx={{ fontSize: "14px" }} />}
-            onClick={copyUrl}
-          >
-            {copied ? "복사됨!" : "URL 복사"}
-          </Button>
-        </FlexBox>
       </div>
+
+      <div style={{ height: "20px" }} />
 
       {/* 탭 */}
       <Tab defaultValue="chart" onValueChange={setActiveTab}>
@@ -393,11 +372,10 @@ export default function DashboardPage() {
           justifyContent="space-between"
           sx={(theme) => ({
             marginBottom: "24px",
-            borderBottom: `1px solid ${theme.semantic.line.solid.normal}`,
             height: "48px",
           })}
         >
-          <TabList size="large">
+          <TabList size="small">
             <TabListItem value="chart">MaxDiff 점수</TabListItem>
             <TabListItem value="table">상세 테이블</TabListItem>
             <TabListItem value="matrix">Matrix 분석</TabListItem>
@@ -417,7 +395,7 @@ export default function DashboardPage() {
         </FlexBox>
 
         {/* 막대 차트 */}
-        <TabPanel value="chart">
+        <TabPanel value="chart" style={{ paddingTop: "20px" }}>
           <Box
             sx={(theme) => ({
               backgroundColor: theme.semantic.fill.normal,
@@ -467,7 +445,7 @@ export default function DashboardPage() {
         </TabPanel>
 
         {/* 상세 테이블 */}
-        <TabPanel value="table">
+        <TabPanel value="table" style={{ paddingTop: "20px" }}>
           <Box
             sx={(theme) => ({
               border: `1px solid ${theme.semantic.line.solid.normal}`,
@@ -523,7 +501,7 @@ export default function DashboardPage() {
         </TabPanel>
 
         {/* Matrix 분석 */}
-        <TabPanel value="matrix">
+        <TabPanel value="matrix" style={{ paddingTop: "20px" }}>
           <FlexBox alignItems="flex-start" justifyContent="space-between" gap="16px" sx={{ marginBottom: "16px" }}>
             <Typography
               variant="body2"
@@ -763,124 +741,6 @@ export default function DashboardPage() {
           </TabPanel>
         )}
       </Tab>
-
-      {/* 공동 관리자 관리 섹션 */}
-      {isOwner && (
-        <Box
-          sx={(theme) => ({
-            marginTop: "32px",
-            border: `1px solid ${theme.semantic.line.solid.normal}`,
-            borderRadius: "8px",
-            overflow: "hidden",
-          })}
-        >
-          <div className="px-5 pt-5 pb-3">
-            <Typography
-              variant="body1"
-              weight="bold"
-              sx={(theme) => ({ color: theme.semantic.label.normal })}
-            >
-              공동 관리자
-            </Typography>
-          </div>
-          <div className="px-5 pb-5 space-y-4">
-            <form
-              className="flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                addAdmin();
-              }}
-            >
-              <TextField
-                type="email"
-                value={adminEmail}
-                onChange={(e) => setAdminEmail(e.target.value)}
-                placeholder="초대할 이메일 주소"
-                sx={{ flex: 1 }}
-              />
-              <Button
-                type="submit"
-                size="small"
-                disabled={adminLoading || !adminEmail.trim()}
-                loading={adminLoading}
-              >
-                추가
-              </Button>
-            </form>
-            {adminError && (
-              <Typography
-                variant="body2"
-                sx={(theme) => ({ color: theme.semantic.status.negative })}
-              >
-                {adminError}
-              </Typography>
-            )}
-
-            {admins.length === 0 ? (
-              <Typography
-                variant="body2"
-                sx={(theme) => ({ color: theme.semantic.label.alternative })}
-              >
-                공동 관리자가 없습니다. 이메일로 추가해주세요.
-              </Typography>
-            ) : (
-              <div className="space-y-2">
-                {admins.map((admin) => (
-                  <FlexBox
-                    key={admin.userId}
-                    alignItems="center"
-                    gap="12px"
-                    sx={(theme) => ({
-                      border: `1px solid ${theme.semantic.line.solid.normal}`,
-                      borderRadius: "8px",
-                      padding: "8px 12px",
-                    })}
-                  >
-                    {admin.image ? (
-                      <img
-                        src={admin.image}
-                        alt={admin.name}
-                        className="w-8 h-8 rounded-full object-cover shrink-0"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center shrink-0 text-xs font-medium text-muted-foreground">
-                        {admin.name?.[0] || "?"}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <Typography
-                        variant="body2"
-                        weight="medium"
-                        noWrap
-                        sx={(theme) => ({ color: theme.semantic.label.normal, display: "block" })}
-                      >
-                        {admin.name}
-                      </Typography>
-                      <Typography
-                        variant="caption1"
-                        noWrap
-                        sx={(theme) => ({ color: theme.semantic.label.alternative, display: "block" })}
-                      >
-                        {admin.email}
-                      </Typography>
-                    </div>
-                    <IconButton
-                      size={28}
-                      sx={(theme) => ({
-                        color: theme.semantic.label.alternative,
-                        "&:hover": { color: theme.semantic.status.negative },
-                      })}
-                      onClick={() => removeAdmin(admin.userId)}
-                    >
-                      <IconClose />
-                    </IconButton>
-                  </FlexBox>
-                ))}
-              </div>
-            )}
-          </div>
-        </Box>
-      )}
     </div>
   );
 }
