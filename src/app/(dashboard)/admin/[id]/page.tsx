@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import SurveyForm, { SurveyFormData } from "@/components/survey-form";
+import SurveyForm, { SurveyFormData, SurveyFormRef } from "@/components/survey-form";
 import {
   Avatar,
   AvatarButton,
@@ -42,8 +42,10 @@ export default function EditSurveyPage() {
   const surveyId = params.id as string;
   const { data: session, status } = useSession();
 
+  const formRef = useRef<SurveyFormRef>(null);
   const [surveyData, setSurveyData] = useState<SurveyFormData | null>(null);
   const [surveyTitle, setSurveyTitle] = useState("");
+  const [editingTitle, setEditingTitle] = useState(false);
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState<EditorTab>("questions");
 
@@ -153,16 +155,16 @@ export default function EditSurveyPage() {
   }
 
   return (
-    <div style={{ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <Box sx={(theme) => ({ height: "100vh", display: "flex", flexDirection: "column", overflow: "hidden", backgroundColor: theme.semantic.background.normal.alternative })}>
       {/* Editor GNB */}
       <Box
         as="header"
-        sx={() => ({
+        sx={(theme) => ({
           position: "sticky",
           top: 0,
           zIndex: 50,
-          backdropFilter: "blur(32px)",
-          backgroundColor: "rgba(255, 255, 255, 0.88)",
+          backgroundColor: theme.semantic.background.normal.normal,
+          borderBottom: `1px solid ${theme.semantic.line.solid.neutral}`,
           height: "60px",
           flexShrink: 0,
         })}
@@ -189,13 +191,47 @@ export default function EditSurveyPage() {
                 color: theme.semantic.label.alternative,
               })}
             />
-            <Typography
-              variant="body1"
-              weight="bold"
-              sx={(theme) => ({ color: theme.semantic.label.alternative })}
-            >
-              {surveyTitle}
-            </Typography>
+            {editingTitle ? (
+              <input
+                autoFocus
+                value={surveyTitle}
+                onChange={(e) => setSurveyTitle(e.target.value)}
+                onBlur={() => {
+                  setEditingTitle(false);
+                  if (surveyData) setSurveyData({ ...surveyData, title: surveyTitle });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") setEditingTitle(false);
+                  if (e.key === "Escape") setEditingTitle(false);
+                }}
+                style={{
+                  border: "none",
+                  outline: "none",
+                  background: "transparent",
+                  fontSize: "14px",
+                  fontWeight: 700,
+                  fontFamily: "inherit",
+                  color: "inherit",
+                  padding: "2px 4px",
+                  borderRadius: "4px",
+                  minWidth: "80px",
+                  boxShadow: "0 0 0 1px rgba(0,0,0,0.12)",
+                }}
+              />
+            ) : (
+              <Typography
+                variant="body1"
+                weight="bold"
+                sx={(theme) => ({
+                  color: theme.semantic.label.alternative,
+                  cursor: "pointer",
+                  "&:hover": { opacity: 0.7 },
+                })}
+                onClick={() => setEditingTitle(true)}
+              >
+                {surveyTitle || "제목 없음"}
+              </Typography>
+            )}
           </FlexBox>
 
           {/* Center: SegmentedControl */}
@@ -217,19 +253,13 @@ export default function EditSurveyPage() {
           <FlexBox alignItems="center" gap="16px">
             <FlexBox alignItems="center" gap="10px">
               <FlexBox alignItems="center" gap="8px">
-                <Button
-                  variant="outlined"
-                  color="assistive"
-                  size="small"
-                  iconOnly
-                  onClick={() => window.open(`/survey/${surveyId}`, "_blank")}
-                >
-                  <IconEye />
-                </Button>
                 <Button variant="outlined" color="assistive" size="small" onClick={copyUrl}>
                   {copied ? "복사됨!" : "공유"}
                 </Button>
-                <Button variant="outlined" color="assistive" size="small">
+                <Button variant="outlined" color="assistive" size="small" onClick={() => {
+                  formRef.current?.setTitle(surveyTitle);
+                  formRef.current?.submit("draft");
+                }}>
                   임시저장
                 </Button>
               </FlexBox>
@@ -240,7 +270,10 @@ export default function EditSurveyPage() {
                   backgroundColor: theme.semantic.line.solid.normal,
                 })}
               />
-              <Button variant="solid" color="primary" size="small">
+              <Button variant="solid" color="primary" size="small" onClick={() => {
+                formRef.current?.setTitle(surveyTitle);
+                formRef.current?.submit("published");
+              }}>
                 발행하기
               </Button>
             </FlexBox>
@@ -272,7 +305,7 @@ export default function EditSurveyPage() {
       <div style={{ flex: 1, minHeight: 0 }}>
         {activeTab === "questions" && (
           <div style={{ height: "100%" }}>
-            <SurveyForm mode="edit" initialData={surveyData} surveyId={surveyId} />
+            <SurveyForm ref={formRef} mode="edit" initialData={surveyData} surveyId={surveyId} />
           </div>
         )}
         {activeTab === "responses" && (
@@ -429,6 +462,6 @@ export default function EditSurveyPage() {
           </div>
         )}
       </div>
-    </div>
+    </Box>
   );
 }

@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, forwardRef, useImperativeHandle } from "react";
 import { useRouter } from "next/navigation";
 import {
   Box,
   Button,
-  ContentBadge,
   FlexBox,
   IconButton,
   Menu,
@@ -16,22 +15,24 @@ import {
   Option,
   Select,
   Switch,
+  TextButton,
   TextField,
   Typography,
 } from "@wanteddev/wds";
 import {
-  IconAlignJustify,
-  IconCircleCheck,
+  IconCaretDown,
   IconCircleCheckFill,
+  IconCircleInfoFill,
   IconCirclePlusFill,
   IconClose,
-  IconEye,
+  IconCopy,
   IconHandle,
   IconHandleDesktop,
-  IconLike,
-  IconLineHorizontal,
+  IconImage,
   IconListCategory,
-  IconPlus,
+  IconLineHorizontal,
+  IconMoreVertical,
+  IconTrash,
   IconVerifiedStarFill,
 } from "@wanteddev/wds-icon";
 import { PageContent } from "@/components/page-content";
@@ -67,6 +68,8 @@ interface MaxDiffBlock {
   title: string;
   items: ItemInput[];
   setSize: number;
+  bestLabel: string;
+  worstLabel: string;
   order: number;
 }
 
@@ -114,7 +117,12 @@ interface SurveyFormProps {
   surveyId?: string;
 }
 
-// ── 레이블 / 아이콘 / 스타일 ─────────────────────────────────────────────────
+export interface SurveyFormRef {
+  submit: (status: "published" | "draft") => Promise<void>;
+  setTitle: (title: string) => void;
+}
+
+// ── 레이블 / 아이콘 ─────────────────────────────────────────────────
 
 const BLOCK_TYPE_LABELS: Record<Block["type"], string> = {
   maxdiff: "MaxDiff",
@@ -132,22 +140,6 @@ const BLOCK_TYPE_ICONS: Record<Block["type"], React.ReactNode> = {
   section:         <IconLineHorizontal />,
 };
 
-const BLOCK_TYPE_STYLE: Record<Block["type"], { bg: string; color: string }> = {
-  maxdiff:         { bg: "#EFF6FF", color: "#3B82F6" },
-  multiple_choice: { bg: "#F5F3FF", color: "#8B5CF6" },
-  short_answer:    { bg: "#FFFBEB", color: "#F59E0B" },
-  long_answer:     { bg: "#ECFDF5", color: "#10B981" },
-  section:         { bg: "#F9FAFB", color: "#9CA3AF" },
-};
-
-const BLOCK_TYPE_ACCENT_COLOR: Record<Block["type"], string> = {
-  multiple_choice: "semantic.accent.foreground.cyan",
-  short_answer:    "semantic.accent.foreground.violet",
-  long_answer:     "semantic.accent.foreground.pink",
-  maxdiff:         "semantic.accent.foreground.green",
-  section:         "",
-};
-
 const ADD_OPTIONS: Exclude<Block["type"], "section">[] = [
   "maxdiff",
   "multiple_choice",
@@ -159,7 +151,7 @@ const ADD_OPTIONS: Exclude<Block["type"], "section">[] = [
 
 function createBlock(type: Block["type"], order: number): Block {
   if (type === "maxdiff") {
-    return { id: crypto.randomUUID(), type: "maxdiff", title: "", items: [], setSize: 4, order };
+    return { id: crypto.randomUUID(), type: "maxdiff", title: "", items: [], setSize: 4, bestLabel: "", worstLabel: "", order };
   }
   if (type === "section") {
     return { id: crypto.randomUUID(), type: "section", title: "", order };
@@ -188,6 +180,8 @@ function initBlocks(initialData?: SurveyFormData): Block[] {
       title: "",
       items: initialData.items.map((i) => ({ id: crypto.randomUUID(), ...i })),
       setSize: initialData.setSize || 4,
+      bestLabel: "",
+      worstLabel: "",
       order: 0,
     });
   }
@@ -202,6 +196,7 @@ function initBlocks(initialData?: SurveyFormData): Block[] {
           title: q.title,
           options: q.options || [],
           required: q.required ?? true,
+          multipleAnswers: q.multipleAnswers ?? false,
           order: blocks.length + i,
         });
       }
@@ -212,10 +207,9 @@ function initBlocks(initialData?: SurveyFormData): Block[] {
 
 // ── 메인 컴포넌트 ─────────────────────────────────────────────────────────────
 
-export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormProps) {
+const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyForm({ mode, initialData, surveyId }, ref) {
   const router = useRouter();
 
-  // 초기 blocks와 selectedId를 한 번에 계산해 UUID 불일치 방지
   const [initData] = useState(() => {
     const blocks = initBlocks(initialData);
     return { blocks, selectedId: blocks[0]?.id ?? null };
@@ -229,20 +223,59 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
   const [savingType, setSavingType] = useState<"draft" | "published" | null>(null);
   const [copied, setCopied] = useState(false);
 
+  useImperativeHandle(ref, () => ({
+    submit: submitSurvey,
+    setTitle,
+  }));
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const selectedBlock = blocks.find((b) => b.id === selectedId) ?? null;
-  const selectedIdx = blocks.findIndex((b) => b.id === selectedId);
-
   // ── 블록 조작 ──────────────────────────────────────────────────────────────
 
-  const addBlock = (type: Block["type"]) => {
+  const addBlock = (type: Block["type"], afterId?: string) => {
     const newBlock = createBlock(type, blocks.length);
-    setBlocks((prev) => [...prev, newBlock]);
+    // MaxDiff는 항상 개별 섹션으로 생성
+    const sectionBlock = type === "maxdiff" ? createBlock("section", blocks.length) : null;
+    setBlocks((prev) => {
+      if (afterId) {
+        const idx = prev.findIndex((b) => b.id === afterId);
+        const next = [...prev];
+        if (sectionBlock) {
+          next.splice(idx + 1, 0, sectionBlock, newBlock);
+        } else {
+          next.splice(idx + 1, 0, newBlock);
+        }
+        return next.map((b, i) => ({ ...b, order: i }));
+      }
+      if (sectionBlock) {
+        return [...prev, sectionBlock, newBlock];
+      }
+      return [...prev, newBlock];
+    });
     setSelectedId(newBlock.id);
+  };
+
+  const duplicateBlock = (id: string) => {
+    setBlocks((prev) => {
+      const idx = prev.findIndex((b) => b.id === id);
+      if (idx === -1) return prev;
+      const original = prev[idx];
+      const dup = { ...JSON.parse(JSON.stringify(original)), id: crypto.randomUUID() };
+      if (dup.type === "maxdiff") {
+        dup.items = dup.items.map((i: ItemInput) => ({ ...i, id: crypto.randomUUID() }));
+        // MaxDiff 복제 시 개별 섹션도 함께 생성
+        const sectionBlock = createBlock("section", 0);
+        const next = [...prev];
+        next.splice(idx + 1, 0, sectionBlock, dup);
+        return next.map((b, i) => ({ ...b, order: i }));
+      }
+      const next = [...prev];
+      next.splice(idx + 1, 0, dup);
+      return next.map((b, i) => ({ ...b, order: i }));
+    });
   };
 
   const removeBlock = (id: string) => {
@@ -256,15 +289,48 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
     });
   };
 
-  const moveBlock = (id: string, dir: "up" | "down") => {
+  const duplicateSection = (sectionId: string) => {
     setBlocks((prev) => {
-      const idx = prev.findIndex((b) => b.id === id);
-      if (dir === "up" && idx === 0) return prev;
-      if (dir === "down" && idx === prev.length - 1) return prev;
+      const sectionIdx = prev.findIndex((b) => b.id === sectionId);
+      if (sectionIdx === -1) return prev;
+      // 섹션과 그 하위 블록들을 찾기
+      const childBlocks: Block[] = [];
+      for (let i = sectionIdx + 1; i < prev.length; i++) {
+        if (prev[i].type === "section") break;
+        childBlocks.push(prev[i]);
+      }
+      // 섹션 복제
+      const dupSection = { ...JSON.parse(JSON.stringify(prev[sectionIdx])), id: crypto.randomUUID() };
+      // 하위 블록들 복제
+      const dupChildren = childBlocks.map((b) => {
+        const dup = { ...JSON.parse(JSON.stringify(b)), id: crypto.randomUUID() };
+        if (dup.type === "maxdiff") {
+          dup.items = dup.items.map((i: ItemInput) => ({ ...i, id: crypto.randomUUID() }));
+        }
+        return dup;
+      });
+      const insertIdx = sectionIdx + 1 + childBlocks.length;
       const next = [...prev];
-      const swap = dir === "up" ? idx - 1 : idx + 1;
-      [next[idx], next[swap]] = [next[swap], next[idx]];
+      next.splice(insertIdx, 0, dupSection, ...dupChildren);
       return next.map((b, i) => ({ ...b, order: i }));
+    });
+  };
+
+  const removeSectionWithBlocks = (sectionId: string) => {
+    setBlocks((prev) => {
+      const sectionIdx = prev.findIndex((b) => b.id === sectionId);
+      if (sectionIdx === -1) return prev;
+      // 섹션과 그 하위 블록들의 ID 수집
+      const idsToRemove = new Set<string>([sectionId]);
+      for (let i = sectionIdx + 1; i < prev.length; i++) {
+        if (prev[i].type === "section") break;
+        idsToRemove.add(prev[i].id);
+      }
+      const filtered = prev.filter((b) => !idsToRemove.has(b.id)).map((b, i) => ({ ...b, order: i }));
+      if (selectedId && idsToRemove.has(selectedId)) {
+        setSelectedId(filtered[0]?.id ?? null);
+      }
+      return filtered;
     });
   };
 
@@ -285,12 +351,30 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
   };
 
   const changeBlockType = (id: string, type: Block["type"]) => {
+    if (type === "maxdiff") {
+      // MaxDiff로 변경 시 해당 블록 앞에 섹션 자동 삽입
+      setBlocks((prev) => {
+        const idx = prev.findIndex((b) => b.id === id);
+        if (idx === -1) return prev;
+        const b = prev[idx];
+        const maxdiffBlock: MaxDiffBlock = { id: b.id, type: "maxdiff", title: b.title, items: [], setSize: 4, bestLabel: "", worstLabel: "", order: b.order };
+        // 바로 앞이 이미 섹션이면 추가하지 않음
+        const prevBlock = idx > 0 ? prev[idx - 1] : null;
+        if (prevBlock?.type === "section") {
+          const next = [...prev];
+          next[idx] = maxdiffBlock;
+          return next.map((bl, i) => ({ ...bl, order: i }));
+        }
+        const sectionBlock = createBlock("section", 0);
+        const next = [...prev];
+        next.splice(idx, 1, sectionBlock, maxdiffBlock);
+        return next.map((bl, i) => ({ ...bl, order: i }));
+      });
+      return;
+    }
     setBlocks((prev) =>
       prev.map((b) => {
         if (b.id !== id) return b;
-        if (type === "maxdiff") {
-          return { id: b.id, type: "maxdiff", title: b.title, items: [], setSize: 4, order: b.order };
-        }
         if (type === "section") {
           return { id: b.id, type: "section", title: b.type !== "maxdiff" ? b.title : "", order: b.order };
         }
@@ -465,204 +549,215 @@ export default function SurveyForm({ mode, initialData, surveyId }: SurveyFormPr
     );
   }
 
-  // ── 3-패널 에디터 ─────────────────────────────────────────────────────────
+  // ── 섹션별로 블록 그룹화 ──────────────────────────────────────────────────
+
+  const sectionGroups: { section: SectionBlock | null; blocks: Block[] }[] = [];
+  let currentGroup: { section: SectionBlock | null; blocks: Block[] } = { section: null, blocks: [] };
+
+  blocks.forEach((block) => {
+    if (block.type === "section") {
+      if (currentGroup.blocks.length > 0 || currentGroup.section) {
+        sectionGroups.push(currentGroup);
+      }
+      currentGroup = { section: block, blocks: [] };
+    } else {
+      currentGroup.blocks.push(block);
+    }
+  });
+  sectionGroups.push(currentGroup);
+
+  let questionCounter = 0;
+
+  // ── 렌더링 ──────────────────────────────────────────────────────────────
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-
-      {/* ── 3-패널 본문 ── */}
-      <Box
-        sx={(theme) => ({
+      <div
+        style={{
           flex: 1,
-          display: "flex",
-          overflow: "hidden",
-          gap: "20px",
-          padding: "20px",
-          maxWidth: "1400px",
-          margin: "0 auto",
-          width: "100%",
-          backgroundColor: theme.semantic.background.normal.normal,
           minHeight: 0,
-        })}
+          overflowY: "auto",
+          padding: "24px 20px 80px",
+        }}
       >
+        <div style={{ maxWidth: "780px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "24px" }}>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+              {sectionGroups.map((group, gi) => (
+                <div key={gi} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                  {/* 섹션 헤더 */}
+                  {(group.section || gi === 0) && (
+                    <SectionHeader
+                      section={group.section}
+                      index={gi}
+                      onRemove={removeSectionWithBlocks}
+                      onDuplicate={duplicateSection}
+                    />
+                  )}
 
-        {/* ── LEFT: 문항 목록 사이드바 ── */}
-        <Box
-          sx={(theme) => ({
-            width: "240px",
-            flexShrink: 0,
-            border: `1px solid ${theme.semantic.line.normal.alternative}`,
-            borderRadius: "16px",
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            backgroundColor: "#f7f7f8",
-          })}
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "20px", padding: "12px", flex: 1, overflowY: "auto" }}>
-            {/* 문항 목록 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-                  {(() => {
-                    let qNum = 0;
-                    return blocks.map((block) => {
-                      if (block.type !== "section") qNum++;
-                      return (
-                        <SortableQuestionListItem
-                          key={block.id}
+                  {/* 문항 카드들 */}
+                  {group.blocks.map((block) => {
+                    questionCounter++;
+                    const isSelected = selectedId === block.id;
+                    return (
+                      <div key={block.id} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                        <SortableQuestionCard
                           block={block}
-                          questionNumber={block.type !== "section" ? qNum : undefined}
-                          selected={selectedId === block.id}
+                          questionNumber={questionCounter}
+                          selected={isSelected}
+                          uploading={uploading}
                           onSelect={() => setSelectedId(block.id)}
+                          onUpdate={updateBlock}
+                          onChangeType={changeBlockType}
                           onRemove={removeBlock}
+                          onDuplicate={duplicateBlock}
+                          onAddItem={addItem}
+                          onRemoveItem={removeItem}
+                          onImageUpload={handleImageUpload}
+                          onAddOption={addOption}
+                          onUpdateOption={updateOption}
+                          onRemoveOption={removeOption}
                         />
-                      );
-                    });
-                  })()}
-                </SortableContext>
-              </DndContext>
+                        {isSelected && (
+                          <AddQuestionRow
+                            onAddBlock={(type) => addBlock(type, block.id)}
+                            onAddSection={() => addBlock("section", block.id)}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </SortableContext>
+          </DndContext>
 
-              {/* 섹션 추가 + 문항 추가 */}
-              <FlexBox alignItems="center" gap="8px" sx={{ padding: "8px 0" }}>
-                <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
-                <Button
-                  variant="outlined"
-                  color="assistive"
-                  size="small"
-                  onClick={() => addBlock("section")}
-                  leadingContent={<IconCirclePlusFill />}
-                  sx={(theme) => ({ backgroundColor: theme.semantic.background.normal.normal })}
-                >
-                  섹션
-                </Button>
-                <Menu value="" onValueChange={() => {}}>
-                  <MenuTrigger>
-                    <Button
-                      variant="outlined"
-                      color="assistive"
-                      size="small"
-                      leadingContent={<IconCirclePlusFill />}
-                      sx={(theme) => ({ backgroundColor: theme.semantic.background.normal.normal })}
-                    >
-                      문항
-                    </Button>
-                  </MenuTrigger>
-                  <MenuContent disablePortal sx={{ borderRadius: "16px", minWidth: "unset" }}>
-                    <MenuList>
-                      {ADD_OPTIONS.map((type) => (
-                        <MenuItem
-                          key={type}
-                          value={type}
-                          verticalPadding="small"
-                          onClick={() => addBlock(type)}
-                          leadingContent={BLOCK_TYPE_ICONS[type]}
-                          sx={{ alignItems: "center" }}
-                        >
-                          {BLOCK_TYPE_LABELS[type]}
-                        </MenuItem>
-                      ))}
-                    </MenuList>
-                  </MenuContent>
-                </Menu>
-                <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
-              </FlexBox>
-            </div>
-          </div>
-        </Box>
-
-        {/* ── CENTER: 문항 에디터 ── */}
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-          }}
-        >
-          {/* 에디터 콘텐츠 */}
-          <div
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflowY: "auto",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              padding: 0,
-            }}
-          >
-            {selectedBlock ? (
-              <CenterEditor
-                block={selectedBlock}
-                idx={selectedIdx}
-                uploading={uploading}
-                onUpdate={updateBlock}
-                onAddItem={addItem}
-                onRemoveItem={removeItem}
-                onImageUpload={handleImageUpload}
-                onAddOption={addOption}
-                onUpdateOption={updateOption}
-                onRemoveOption={removeOption}
-              />
-            ) : (
-              <FlexBox alignItems="center" justifyContent="center" sx={{ minHeight: "120px" }}>
-                <Typography variant="body2" sx={(theme) => ({ color: theme.semantic.label.alternative })}>
-                  왼쪽에서 문항을 선택하거나 추가하세요
-                </Typography>
-              </FlexBox>
-            )}
-          </div>
         </div>
-
-        {/* ── RIGHT: 문항 설정 패널 ── */}
-        <Box
-          sx={(theme) => ({
-            width: "240px",
-            flexShrink: 0,
-            border: `1px solid ${theme.semantic.line.normal.alternative}`,
-            borderRadius: "16px",
-            overflowY: "auto",
-            backgroundColor: "#f7f7f8",
-          })}
-        >
-          {selectedBlock ? (
-            <RightSettings
-              block={selectedBlock}
-              idx={selectedIdx}
-              totalBlocks={blocks.length}
-              onUpdate={updateBlock}
-              onChangeType={changeBlockType}
-              onRemove={removeBlock}
-              onMove={moveBlock}
-            />
-          ) : (
-            <Box sx={{ padding: "20px" }}>
-              <Typography variant="caption1" sx={(theme) => ({ color: theme.semantic.label.alternative })}>
-                문항을 선택하면 설정이 표시됩니다.
-              </Typography>
-            </Box>
-          )}
-        </Box>
-      </Box>
+      </div>
     </div>
+  );
+});
+
+export default SurveyForm;
+
+// ── 섹션 헤더 ────────────────────────────────────────────────────────────────
+
+function SectionHeader({
+  section,
+  index,
+  onRemove,
+  onDuplicate,
+}: {
+  section: SectionBlock | null;
+  index: number;
+  onRemove: (id: string) => void;
+  onDuplicate: (id: string) => void;
+}) {
+  const sectionTitle = section?.title || `섹션 ${index + 1}`;
+
+  return (
+    <FlexBox alignItems="center" gap="8px" sx={{ padding: "6px 0" }}>
+      <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
+      {section ? (
+        <Menu value="" onValueChange={() => {}}>
+          <MenuTrigger>
+            <TextButton
+              color="assistive"
+              size="medium"
+              trailingContent={<IconCaretDown />}
+            >
+              {sectionTitle}
+            </TextButton>
+          </MenuTrigger>
+          <MenuContent disablePortal sx={{ borderRadius: "16px", minWidth: "unset" }}>
+            <MenuList>
+              <MenuItem value="duplicate" onClick={() => onDuplicate(section.id)}>
+                <FlexBox alignItems="center" gap="8px">
+                  <IconCopy sx={{ fontSize: "16px" }} />
+                  <span>섹션 복제</span>
+                </FlexBox>
+              </MenuItem>
+              <MenuItem value="delete" onClick={() => onRemove(section.id)}>
+                <FlexBox alignItems="center" gap="8px">
+                  <IconTrash sx={{ fontSize: "16px" }} />
+                  <span>섹션 삭제</span>
+                </FlexBox>
+              </MenuItem>
+            </MenuList>
+          </MenuContent>
+        </Menu>
+      ) : (
+        <TextButton color="assistive" size="medium">
+          {sectionTitle}
+        </TextButton>
+      )}
+      <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
+    </FlexBox>
   );
 }
 
-// ── LEFT 사이드바 아이템 ───────────────────────────────────────────────────────
+// ── 질문 추가 행 ─────────────────────────────────────────────────────────────
 
-interface QuestionListItemProps {
-  block: Block;
-  questionNumber?: number;
-  selected: boolean;
-  onSelect: () => void;
-  onRemove: (id: string) => void;
+function AddQuestionRow({ onAddBlock, onAddSection }: { onAddBlock: (type: Block["type"]) => void; onAddSection: () => void }) {
+  return (
+    <FlexBox alignItems="center" gap="8px" justifyContent="center" sx={{ padding: "8px 0" }}>
+      <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
+      <Box
+        sx={(theme) => ({
+          backgroundColor: "white",
+          border: `1px solid ${theme.semantic.line.solid.neutral}`,
+          borderRadius: "12px",
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          padding: "6px 14px",
+          flexShrink: 0,
+        })}
+      >
+        <Menu value="" onValueChange={() => {}}>
+          <MenuTrigger>
+            <TextButton color="primary" size="small">
+              문항 추가
+            </TextButton>
+          </MenuTrigger>
+          <MenuContent disablePortal sx={{ borderRadius: "16px", minWidth: "unset" }}>
+            <MenuList>
+              {ADD_OPTIONS.map((type) => (
+                <MenuItem
+                  key={type}
+                  value={type}
+                  verticalPadding="small"
+                  onClick={() => onAddBlock(type)}
+                  leadingContent={BLOCK_TYPE_ICONS[type]}
+                  sx={{ alignItems: "center" }}
+                >
+                  {BLOCK_TYPE_LABELS[type]}
+                </MenuItem>
+              ))}
+            </MenuList>
+          </MenuContent>
+        </Menu>
+        <Box
+          sx={(theme) => ({
+            width: "1px",
+            height: "18px",
+            backgroundColor: theme.semantic.line.solid.neutral,
+          })}
+        />
+        <TextButton color="assistive" size="small" onClick={onAddSection}>
+          섹션 추가
+        </TextButton>
+      </Box>
+      <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
+    </FlexBox>
+  );
 }
 
-function SortableQuestionListItem(props: QuestionListItemProps) {
-  const isSection = props.block.type === "section";
+// ── Sortable 카드 래퍼 ───────────────────────────────────────────────────────
+
+function SortableQuestionCard(props: QuestionCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: props.block.id, disabled: isSection });
+    useSortable({ id: props.block.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -672,152 +767,23 @@ function SortableQuestionListItem(props: QuestionListItemProps) {
 
   return (
     <div ref={setNodeRef} style={style}>
-      <QuestionListItem {...props} dragAttributes={attributes} dragListeners={listeners} />
+      <QuestionCard {...props} dragAttributes={attributes} dragListeners={listeners} />
     </div>
   );
 }
 
-function QuestionListItem({
-  block,
-  questionNumber,
-  selected,
-  onSelect,
-  onRemove,
-  dragAttributes,
-  dragListeners,
-}: QuestionListItemProps & {
-  dragAttributes?: ReturnType<typeof useSortable>["attributes"];
-  dragListeners?: ReturnType<typeof useSortable>["listeners"];
-}) {
-  const [hovered, setHovered] = useState(false);
-  const isSection = block.type === "section";
+// ── 문항 카드 ────────────────────────────────────────────────────────────────
 
-  if (isSection) {
-    return (
-      <FlexBox
-        alignItems="center"
-        gap="8px"
-        onClick={onSelect}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        sx={(theme) => ({
-          padding: "6px 0",
-          cursor: "pointer",
-        })}
-      >
-        <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
-        <Typography
-          variant="label2"
-          weight="bold"
-          sx={(theme) => ({
-            color: theme.semantic.label.alternative,
-            whiteSpace: "nowrap",
-          })}
-        >
-          {block.title || "섹션"}
-        </Typography>
-        {hovered && (
-          <Box
-            as="button"
-            onClick={(e: React.MouseEvent) => { e.stopPropagation(); onRemove(block.id); }}
-            sx={(theme) => ({
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              border: "none",
-              background: "none",
-              cursor: "pointer",
-              color: theme.semantic.label.alternative,
-              padding: 0,
-              flexShrink: 0,
-              "&:hover": { color: theme.semantic.status.negative },
-            })}
-          >
-            <IconClose style={{ width: 14, height: 14 }} />
-          </Box>
-        )}
-        <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
-      </FlexBox>
-    );
-  }
-
-  return (
-    <Box
-      onClick={onSelect}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      sx={(theme) => ({
-        display: "flex",
-        alignItems: "center",
-        gap: "8px",
-        padding: "10px 12px",
-        cursor: "pointer",
-        backgroundColor: selected
-          ? theme.semantic.fill.normal
-          : hovered
-            ? theme.semantic.fill.alternative
-            : "transparent",
-        borderRadius: "12px",
-        transition: "background-color 0.1s",
-      })}
-    >
-      {/* 드래그 핸들 (hover 시) */}
-      {hovered && !selected && (
-        <div
-          {...dragAttributes}
-          {...dragListeners}
-          onClick={(e) => e.stopPropagation()}
-          style={{ cursor: "grab", touchAction: "none", flexShrink: 0, display: "flex", height: 16 }}
-        >
-          <IconHandleDesktop sx={{ fontSize: "16px" }} />
-        </div>
-      )}
-
-      {/* 타입 뱃지 */}
-      <ContentBadge
-        leadingContent={BLOCK_TYPE_ICONS[block.type]}
-        color="accent"
-        accentColor={BLOCK_TYPE_ACCENT_COLOR[block.type] as any}
-        size="small"
-        variant="solid"
-      >
-        {BLOCK_TYPE_LABELS[block.type]}
-      </ContentBadge>
-
-      {/* 제목 */}
-      <Typography
-        variant="label1"
-        weight={selected ? "medium" : "regular"}
-        noWrap
-        sx={(theme) => ({
-          flex: 1,
-          minWidth: 0,
-          color: theme.semantic.label.normal,
-        })}
-      >
-        {block.title || "title"}
-      </Typography>
-
-      {/* 삭제 버튼 (hover 시) */}
-      {hovered && (
-        <div
-          onClick={(e) => { e.stopPropagation(); onRemove(block.id); }}
-          style={{ cursor: "pointer", flexShrink: 0, display: "flex", height: 16 }}
-        >
-          <IconClose sx={{ fontSize: "16px" }} />
-        </div>
-      )}
-    </Box>
-  );
-}
-
-// ── CENTER 에디터 ─────────────────────────────────────────────────────────────
-
-interface CenterEditorProps {
+interface QuestionCardProps {
   block: Block;
-  idx: number;
+  questionNumber: number;
+  selected: boolean;
   uploading: string | null;
+  onSelect: () => void;
   onUpdate: (id: string, patch: Partial<Block>) => void;
+  onChangeType: (id: string, type: Block["type"]) => void;
+  onRemove: (id: string) => void;
+  onDuplicate: (id: string) => void;
   onAddItem: (blockId: string, name: string) => void;
   onRemoveItem: (blockId: string, itemId: string) => void;
   onImageUpload: (blockId: string, itemId: string, file: File) => void;
@@ -826,275 +792,388 @@ interface CenterEditorProps {
   onRemoveOption: (blockId: string, idx: number) => void;
 }
 
-function CenterEditor(props: CenterEditorProps) {
-  const { block, idx, uploading, onUpdate, onAddItem, onRemoveItem, onImageUpload, onAddOption, onUpdateOption, onRemoveOption } = props;
-  const [newItemName, setNewItemName] = useState("");
-
-  if (block.type === "section") {
-    return (
-      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-        <div style={{ flex: 1, height: 1, backgroundColor: "#E5E7EB" }} />
-        <input
-          value={block.title}
-          onChange={(e) => onUpdate(block.id, { title: e.target.value } as Partial<SectionBlock>)}
-          placeholder="섹션 제목"
-          style={{
-            border: "none", outline: "none", textAlign: "center",
-            fontWeight: 600, fontSize: "13px", color: "#6B7280",
-            background: "transparent",
-          }}
-        />
-        <div style={{ flex: 1, height: 1, backgroundColor: "#E5E7EB" }} />
-      </div>
-    );
-  }
+function QuestionCard({
+  block,
+  selected,
+  uploading,
+  onSelect,
+  onUpdate,
+  onChangeType,
+  onRemove,
+  onDuplicate,
+  onAddItem,
+  onRemoveItem,
+  onImageUpload,
+  onAddOption,
+  onUpdateOption,
+  onRemoveOption,
+  dragAttributes,
+  dragListeners,
+}: QuestionCardProps & {
+  dragAttributes?: ReturnType<typeof useSortable>["attributes"];
+  dragListeners?: ReturnType<typeof useSortable>["listeners"];
+}) {
+  if (block.type === "section") return null;
 
   return (
     <Box
+      onClick={onSelect}
       sx={(theme) => ({
-        backgroundColor: "white",
-        border: `1px solid ${theme.semantic.line.normal.normal}`,
-        borderRadius: "12px",
-        padding: "61px 81px",
-        display: "flex",
-        flexDirection: "column",
-        gap: "16px",
-        flex: 1,
-        width: "100%",
-        maxWidth: "640px",
+        borderRadius: "20px",
+        overflow: "hidden",
+        border: selected
+          ? `1px solid #9EC5FF`
+          : `1px solid ${theme.semantic.line.solid.neutral}`,
+        boxShadow: selected ? "0 0 0 4px rgba(0,102,255,0.12)" : "none",
+        transition: "border-color 0.15s, box-shadow 0.15s",
+        cursor: "default",
       })}
     >
-      {/* 문항 제목 */}
-      <input
-        value={block.title}
-        onChange={(e) => onUpdate(block.id, { title: e.target.value })}
-        placeholder="문항 제목"
-        style={{
-          border: "none",
-          outline: "none",
-          fontSize: "15px",
-          fontWeight: 500,
-          color: "#171719",
-          background: "transparent",
-          fontFamily: "inherit",
-          lineHeight: "1.467",
-          width: "100%",
-        }}
-      />
-
-      {/* 답변 영역 */}
-      {(block.type === "short_answer" || block.type === "long_answer") && (
-        <div style={{ borderBottom: "1px solid #E1E2E4", paddingBottom: "9px" }}>
-          {block.type === "long_answer" ? (
-            <textarea
-              disabled
-              placeholder="답변"
-              rows={3}
-              style={{
-                width: "100%",
-                border: "none",
-                outline: "none",
-                fontSize: "16px",
-                color: "rgba(55, 56, 60, 0.28)",
-                background: "transparent",
-                fontFamily: "inherit",
-                lineHeight: "1.625",
-                resize: "none",
-                cursor: "default",
-              }}
-            />
-          ) : (
-            <input
-              disabled
-              placeholder="답변"
-              style={{
-                width: "100%",
-                border: "none",
-                outline: "none",
-                fontSize: "16px",
-                color: "rgba(55, 56, 60, 0.28)",
-                background: "transparent",
-                fontFamily: "inherit",
-                lineHeight: "1.625",
-                cursor: "default",
-              }}
-            />
-          )}
+      {/* 상단 콘텐츠 영역 */}
+      <div style={{ backgroundColor: "white", padding: "12px 24px 32px", display: "flex", flexDirection: "column", gap: "24px", alignItems: "center" }}>
+        {/* 드래그 핸들 */}
+        <div
+          {...dragAttributes}
+          {...dragListeners}
+          style={{ cursor: "grab", touchAction: "none", display: "flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <IconHandle
+            sx={(theme) => ({
+              fontSize: "20px",
+              color: theme.semantic.label.alternative,
+            })}
+          />
         </div>
-      )}
 
-      {/* 객관식 선택지 */}
-      {block.type === "multiple_choice" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {block.options.map((opt, optIdx) => (
-            <div key={optIdx} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-              {block.multipleAnswers ? (
-                <div style={{ width: 16, height: 16, borderRadius: 3, border: "2px solid #D1D5DB", flexShrink: 0 }} />
-              ) : (
-                <div style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid #D1D5DB", flexShrink: 0 }} />
-              )}
-              <input
-                value={opt}
-                onChange={(e) => onUpdateOption(block.id, optIdx, e.target.value)}
-                placeholder={`선택지 ${optIdx + 1}`}
-                style={{
-                  flex: 1, border: "none", borderBottom: "1px solid #E1E2E4",
-                  outline: "none", fontSize: "15px", color: "#171719",
-                  background: "transparent", padding: "4px 0",
-                  fontFamily: "inherit",
-                }}
-              />
-              <button
-                disabled={block.options.length <= 2}
-                onClick={() => onRemoveOption(block.id, optIdx)}
-                style={{
-                  display: "flex", border: "none", background: "none",
-                  cursor: block.options.length > 2 ? "pointer" : "default",
-                  color: "#D1D5DB", padding: 2,
-                }}
-                onMouseEnter={(e) => { if (block.options.length > 2) (e.currentTarget as HTMLButtonElement).style.color = "#EF4444"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#D1D5DB"; }}
-              >
-                <IconClose style={{ width: 14, height: 14 }} />
-              </button>
-            </div>
-          ))}
-          <button
-            onClick={() => onAddOption(block.id)}
-            style={{
-              border: "none", background: "none", cursor: "pointer",
-              color: "rgba(55, 56, 60, 0.28)", fontSize: "13px", textAlign: "left",
-              padding: "4px 0", marginTop: "4px",
-            }}
-          >
-            + 선택지 추가
-          </button>
-        </div>
-      )}
-
-      {/* MaxDiff 항목 목록 */}
-      {block.type === "maxdiff" && (
-        <div>
-          {block.items.length > 0 && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
-              {block.items.map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "12px",
-                    border: "1px solid #E1E2E4", borderRadius: "8px", padding: "8px 12px",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 36, height: 36, borderRadius: 6, overflow: "hidden",
-                      flexShrink: 0, backgroundColor: "#F3F4F6",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                    }}
-                  >
-                    {item.image ? (
-                      <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : (
-                      <label style={{ cursor: "pointer", color: "#9CA3AF", display: "flex" }}>
-                        <input
-                          type="file"
-                          accept="image/jpeg,image/png,image/gif,image/webp"
-                          style={{ display: "none" }}
-                          onChange={(e) => { const f = e.target.files?.[0]; if (f) onImageUpload(block.id, item.id, f); }}
-                        />
-                        {uploading === item.id ? (
-                          <span style={{ fontSize: "10px" }}>...</span>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-                        )}
-                      </label>
-                    )}
-                  </div>
-                  <span style={{ flex: 1, fontSize: "14px", color: "#171719" }}>{item.name}</span>
-                  {item.image && (
-                    <button
-                      onClick={() => onUpdate(block.id, { items: block.items.map((i) => i.id === item.id ? { ...i, image: undefined } : i) } as Partial<MaxDiffBlock>)}
-                      style={{ fontSize: "11px", color: "#EF4444", border: "none", background: "none", cursor: "pointer", padding: "2px 6px" }}
-                    >
-                      삭제
-                    </button>
-                  )}
-                  <button
-                    onClick={() => onRemoveItem(block.id, item.id)}
-                    style={{ display: "flex", border: "none", background: "none", cursor: "pointer", color: "#9CA3AF", padding: 2 }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#EF4444"; }}
-                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#9CA3AF"; }}
-                  >
-                    <IconClose style={{ width: 14, height: 14 }} />
-                  </button>
-                </div>
-              ))}
-              <span style={{ fontSize: "12px", color: "rgba(55, 56, 60, 0.28)" }}>{block.items.length}개 항목</span>
-            </div>
-          )}
-          <form
-            style={{ display: "flex", gap: "8px" }}
-            onSubmit={(e) => {
-              e.preventDefault();
-              onAddItem(block.id, newItemName);
-              setNewItemName("");
-            }}
-          >
+        {/* 제목 + 타입 셀렉트 */}
+        <div style={{ width: "100%", display: "flex", gap: "16px", alignItems: "flex-start" }}>
+          <div style={{ flex: 1 }}>
             <TextField
-              value={newItemName}
-              onChange={(e) => setNewItemName(e.target.value)}
-              placeholder="항목 이름 입력 후 추가"
+              value={block.title}
+              onChange={(e) => onUpdate(block.id, { title: e.target.value })}
+              placeholder="제목을 입력해 주세요."
               width="100%"
             />
-            <Button type="submit" variant="outlined" color="primary" size="large" sx={{ flexShrink: 0 }}>
-              추가
-            </Button>
-          </form>
+          </div>
+          <div style={{ width: "200px", flexShrink: 0 }}>
+            <Select
+              value={block.type}
+              onChange={(value) => onChangeType(block.id, value as Block["type"])}
+              width="100%"
+              leadingContent={BLOCK_TYPE_ICONS[block.type]}
+            >
+              {ADD_OPTIONS.map((type) => (
+                <Option key={type} value={type}>
+                  {BLOCK_TYPE_LABELS[type]}
+                </Option>
+              ))}
+            </Select>
+          </div>
         </div>
-      )}
+
+        {/* 콘텐츠 영역 */}
+        <div style={{ width: "100%", paddingLeft: "8px" }}>
+          {/* 단답형 */}
+          {block.type === "short_answer" && (
+            <div style={{ borderBottom: "1px solid #E1E2E4", paddingBottom: "9px" }}>
+              <Typography
+                variant="body1"
+                sx={() => ({
+                  fontSize: "15px",
+                  color: "rgba(55,56,60,0.28)",
+                  lineHeight: "1.625",
+                })}
+              >
+                단답형 답변
+              </Typography>
+            </div>
+          )}
+
+          {/* 장문형 */}
+          {block.type === "long_answer" && (
+            <div style={{ borderBottom: "1px solid #E1E2E4", paddingBottom: "9px" }}>
+              <Typography
+                variant="body1"
+                sx={() => ({
+                  fontSize: "15px",
+                  color: "rgba(55,56,60,0.28)",
+                  lineHeight: "1.625",
+                })}
+              >
+                장문형 답변
+              </Typography>
+            </div>
+          )}
+
+          {/* 객관식 */}
+          {block.type === "multiple_choice" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {(block as GeneralBlock).options.map((opt, optIdx) => (
+                <FlexBox
+                  key={optIdx}
+                  alignItems="center"
+                  gap="12px"
+                  sx={(theme) => ({
+                    borderBottom: optIdx === 0 && selected
+                      ? `1px solid #9EC5FF`
+                      : `none`,
+                    paddingBottom: "8px",
+                    height: "35px",
+                  })}
+                >
+                  <IconHandleDesktop
+                    sx={(theme) => ({
+                      fontSize: "16px",
+                      color: theme.semantic.label.alternative,
+                      cursor: "grab",
+                    })}
+                  />
+                  {(block as GeneralBlock).multipleAnswers ? (
+                    <div style={{ width: 24, height: 24, borderRadius: 4, border: "2px solid #D1D5DB", flexShrink: 0 }} />
+                  ) : (
+                    <div style={{ width: 24, height: 24, borderRadius: "50%", border: "2px solid #D1D5DB", flexShrink: 0 }} />
+                  )}
+                  <input
+                    value={opt}
+                    onChange={(e) => onUpdateOption(block.id, optIdx, e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    placeholder={`옵션 ${optIdx + 1}`}
+                    style={{
+                      flex: 1,
+                      border: "none",
+                      outline: "none",
+                      fontSize: "15px",
+                      color: opt ? "#171719" : "rgba(55,56,60,0.61)",
+                      background: "transparent",
+                      fontFamily: "inherit",
+                      lineHeight: "1.625",
+                    }}
+                  />
+                  {optIdx === 0 && selected && (
+                    <IconButton
+                      size={20}
+                      sx={(theme) => ({ color: theme.semantic.label.alternative, marginRight: "2px" })}
+                    >
+                      <IconImage />
+                    </IconButton>
+                  )}
+                  <IconButton
+                    size={16}
+                    onClick={(e) => { e.stopPropagation(); removeOption(block.id, optIdx); }}
+                    disabled={(block as GeneralBlock).options.length <= 2}
+                    sx={(theme) => ({
+                      color: theme.semantic.label.alternative,
+                      "&:hover": { color: theme.semantic.status.negative },
+                    })}
+                  >
+                    <IconClose />
+                  </IconButton>
+                </FlexBox>
+              ))}
+              <TextButton
+                color="assistive"
+                size="medium"
+                leadingContent={<IconCirclePlusFill />}
+                onClick={(e) => { e.stopPropagation(); onAddOption(block.id); }}
+              >
+                옵션 추가
+              </TextButton>
+            </div>
+          )}
+
+          {/* MaxDiff */}
+          {block.type === "maxdiff" && (
+            <MaxDiffContent
+              block={block as MaxDiffBlock}
+              uploading={uploading}
+              onUpdate={onUpdate}
+              onAddItem={addItem}
+              onRemoveItem={removeItem}
+              onImageUpload={onImageUpload}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* 하단 옵션 바 */}
+      <QuestionOptionsBar
+        block={block}
+        onUpdate={onUpdate}
+        onDuplicate={onDuplicate}
+        onRemove={onRemove}
+      />
     </Box>
   );
+
+  function addItem(blockId: string, name: string) {
+    onAddItem(blockId, name);
+  }
+
+  function removeItem(blockId: string, itemId: string) {
+    onRemoveItem(blockId, itemId);
+  }
+
+  function removeOption(blockId: string, idx: number) {
+    onRemoveOption(blockId, idx);
+  }
 }
 
-// ── RIGHT 설정 패널 ───────────────────────────────────────────────────────────
+// ── MaxDiff 콘텐츠 ──────────────────────────────────────────────────────────
 
-interface RightSettingsProps {
-  block: Block;
-  idx: number;
-  totalBlocks: number;
+function MaxDiffContent({
+  block,
+  uploading,
+  onUpdate,
+  onAddItem,
+  onRemoveItem,
+  onImageUpload,
+}: {
+  block: MaxDiffBlock;
+  uploading: string | null;
   onUpdate: (id: string, patch: Partial<Block>) => void;
-  onChangeType: (id: string, type: Block["type"]) => void;
-  onRemove: (id: string) => void;
-  onMove: (id: string, dir: "up" | "down") => void;
-}
-
-function RightSettings({ block, idx, totalBlocks, onUpdate, onChangeType, onRemove, onMove }: RightSettingsProps) {
+  onAddItem: (blockId: string, name: string) => void;
+  onRemoveItem: (blockId: string, itemId: string) => void;
+  onImageUpload: (blockId: string, itemId: string, file: File) => void;
+}) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "16px", padding: "12px" }}>
-      {/* 답변 유형 Select */}
-      {block.type !== "section" && (
-        <Select
-          value={block.type}
-          onChange={(value) => onChangeType(block.id, value as Block["type"])}
-          width="100%"
-        >
-          {ADD_OPTIONS.map((type) => (
-            <Option key={type} value={type}>
-              {BLOCK_TYPE_LABELS[type]}
-            </Option>
-          ))}
-        </Select>
-      )}
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      {/* 항목 목록 */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+        {block.items.map((item, idx) => (
+          <FlexBox key={item.id} alignItems="center" gap="12px">
+            <IconHandleDesktop
+              sx={(theme) => ({
+                fontSize: "16px",
+                color: theme.semantic.label.alternative,
+                cursor: "grab",
+              })}
+            />
+            <Typography
+              variant="body1"
+              sx={() => ({
+                fontSize: "15px",
+                color: "rgba(55,56,60,0.61)",
+                textAlign: "center",
+                width: "24px",
+                flexShrink: 0,
+              })}
+            >
+              {idx + 1}
+            </Typography>
+            {/* 썸네일 */}
+            <div
+              style={{
+                width: 80,
+                height: 60,
+                borderRadius: 12,
+                overflow: "hidden",
+                flexShrink: 0,
+                backgroundColor: "#F3F4F6",
+                border: "1px solid rgba(112,115,124,0.16)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: "8px",
+              }}
+            >
+              {item.image ? (
+                <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <label style={{ cursor: "pointer", color: "#9CA3AF", display: "flex" }} onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    style={{ display: "none" }}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) onImageUpload(block.id, item.id, f); }}
+                  />
+                  {uploading === item.id ? (
+                    <span style={{ fontSize: "10px" }}>...</span>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+                  )}
+                </label>
+              )}
+            </div>
+            {/* 항목 이름 */}
+            <Typography
+              variant="body1"
+              sx={() => ({
+                flex: 1,
+                fontSize: "15px",
+                color: "rgba(55,56,60,0.61)",
+                lineHeight: "1.625",
+              })}
+            >
+              {item.name || `옵션 ${idx + 1}`}
+            </Typography>
+            <IconButton
+              size={16}
+              onClick={(e) => { e.stopPropagation(); onRemoveItem(block.id, item.id); }}
+              sx={(theme) => ({
+                color: theme.semantic.label.alternative,
+                "&:hover": { color: theme.semantic.status.negative },
+              })}
+            >
+              <IconClose />
+            </IconButton>
+          </FlexBox>
+        ))}
+      </div>
 
-      {/* MaxDiff: 세트 크기 */}
-      {block.type === "maxdiff" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      {/* 항목 추가 */}
+      <TextButton
+        color="assistive"
+        size="medium"
+        leadingContent={<IconCirclePlusFill />}
+        onClick={(e) => { e.stopPropagation(); onAddItem(block.id, `옵션 ${block.items.length + 1}`); }}
+      >
+        옵션 추가
+      </TextButton>
+
+      {/* 구분선 */}
+      <Box sx={(theme) => ({ width: "100%", height: "1px", backgroundColor: theme.semantic.line.solid.normal })} />
+
+      {/* Best / Worst 라벨 */}
+      <div style={{ display: "flex", gap: "16px" }}>
+        <div style={{ flex: 1 }}>
+          <TextField
+            value={block.bestLabel}
+            onChange={(e) => onUpdate(block.id, { bestLabel: e.target.value } as Partial<MaxDiffBlock>)}
+            placeholder="Best 라벨"
+            width="100%"
+            leadingContent={
+              <span style={{ fontSize: "16px" }}>👍</span>
+            }
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          <TextField
+            value={block.worstLabel}
+            onChange={(e) => onUpdate(block.id, { worstLabel: e.target.value } as Partial<MaxDiffBlock>)}
+            placeholder="Worst 라벨"
+            width="100%"
+            leadingContent={
+              <span style={{ fontSize: "16px" }}>👎</span>
+            }
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      </div>
+
+      {/* 세트 설정 */}
+      <div style={{ display: "flex", gap: "16px" }}>
+        <div style={{ flex: 1 }}>
           <Typography
-            variant="label2"
+            variant="label1"
             weight="bold"
-            sx={(theme) => ({ color: theme.semantic.label.alternative, paddingLeft: "8px" })}
+            sx={(theme) => ({
+              color: "rgba(46,47,51,0.88)",
+              display: "block",
+              marginBottom: "8px",
+            })}
           >
-            세트당 항목 수
+            세트 당 선택지 수
           </Typography>
           <TextField
             type="number"
@@ -1103,56 +1182,218 @@ function RightSettings({ block, idx, totalBlocks, onUpdate, onChangeType, onRemo
             value={String(block.setSize)}
             onChange={(e) => onUpdate(block.id, { setSize: Number(e.target.value) } as Partial<MaxDiffBlock>)}
             width="100%"
+            onClick={(e) => e.stopPropagation()}
           />
+          <Typography
+            variant="caption1"
+            sx={() => ({
+              color: "rgba(55,56,60,0.61)",
+              display: "block",
+              marginTop: "8px",
+            })}
+          >
+            3-5개를 권장해요.
+          </Typography>
         </div>
-      )}
-
-      {/* 옵션 토글 */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-        {/* 필수 문항 토글 */}
-        {block.type !== "maxdiff" && block.type !== "section" && (
-          <FlexBox
-            alignItems="center"
-            justifyContent="space-between"
-            sx={{ padding: "8px 4px 8px 8px" }}
+        <div style={{ flex: 1 }}>
+          <Typography
+            variant="label1"
+            weight="bold"
+            sx={() => ({
+              color: "rgba(46,47,51,0.88)",
+              display: "block",
+              marginBottom: "8px",
+            })}
           >
-            <Typography
-              variant="label2"
-              weight="bold"
-              sx={(theme) => ({ color: theme.semantic.label.alternative })}
-            >
-              필수 문항
-            </Typography>
-            <Switch
-              size="small"
-              checked={(block as GeneralBlock).required}
-              onCheckedChange={(checked) => onUpdate(block.id, { required: checked } as Partial<GeneralBlock>)}
-            />
-          </FlexBox>
-        )}
-
-        {/* 복수 응답 토글 */}
-        {block.type === "multiple_choice" && (
-          <FlexBox
-            alignItems="center"
-            justifyContent="space-between"
-            sx={{ padding: "8px 4px 8px 8px" }}
+            참가자 당 세트 수
+          </Typography>
+          <TextField
+            readOnly
+            value={String(calculateSets(block.items.length, block.setSize))}
+            width="100%"
+          />
+          <Typography
+            variant="caption1"
+            sx={() => ({
+              color: "rgba(55,56,60,0.61)",
+              display: "block",
+              marginTop: "8px",
+            })}
           >
-            <Typography
-              variant="label2"
-              weight="bold"
-              sx={(theme) => ({ color: theme.semantic.label.alternative })}
-            >
-              복수 응답
-            </Typography>
-            <Switch
-              size="small"
-              checked={(block as GeneralBlock).multipleAnswers ?? false}
-              onCheckedChange={(checked) => onUpdate(block.id, { multipleAnswers: checked } as Partial<GeneralBlock>)}
-            />
-          </FlexBox>
-        )}
+            15-20개를 권장해요.
+          </Typography>
+        </div>
       </div>
     </div>
+  );
+}
+
+function calculateSets(itemCount: number, setSize: number): number {
+  if (itemCount < 2 || setSize < 2) return 0;
+  const minExposure = 3;
+  return Math.ceil((itemCount * minExposure) / setSize);
+}
+
+// ── 하단 옵션 바 ─────────────────────────────────────────────────────────────
+
+function QuestionOptionsBar({
+  block,
+  onUpdate,
+  onDuplicate,
+  onRemove,
+}: {
+  block: Block;
+  onUpdate: (id: string, patch: Partial<Block>) => void;
+  onDuplicate: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  if (block.type === "section") return null;
+
+  return (
+    <Box
+      sx={(theme) => ({
+        backgroundColor: "white",
+        borderTop: `1px solid ${theme.semantic.line.solid.neutral}`,
+        padding: "25px 24px 24px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "flex-end",
+        gap: "24px",
+      })}
+    >
+      {/* MaxDiff 안내 텍스트 */}
+      {block.type === "maxdiff" && (
+        <FlexBox alignItems="center" gap="6px" sx={{ flex: 1 }}>
+          <IconCircleInfoFill
+            sx={() => ({
+              fontSize: "16px",
+              color: "rgba(55,56,60,0.61)",
+            })}
+          />
+          <Typography
+            variant="label1"
+            weight="medium"
+            sx={() => ({
+              color: "rgba(55,56,60,0.61)",
+            })}
+          >
+            MaxDiff 문항은 개별 섹션으로 생성됩니다.
+          </Typography>
+        </FlexBox>
+      )}
+
+      {/* 복수 응답 토글 (객관식만) */}
+      {block.type === "multiple_choice" && (
+        <FlexBox alignItems="center" gap="8px">
+          <Typography
+            variant="label2"
+            weight="bold"
+            sx={() => ({
+              color: "rgba(55,56,60,0.61)",
+            })}
+          >
+            복수 응답
+          </Typography>
+          <Switch
+            size="small"
+            checked={(block as GeneralBlock).multipleAnswers ?? false}
+            onCheckedChange={(checked) => onUpdate(block.id, { multipleAnswers: checked } as Partial<GeneralBlock>)}
+          />
+        </FlexBox>
+      )}
+
+      {/* 필수 문항 토글 */}
+      {block.type !== "maxdiff" && (
+        <FlexBox alignItems="center" gap="8px">
+          <Typography
+            variant="label2"
+            weight="bold"
+            sx={() => ({
+              color: "rgba(55,56,60,0.61)",
+            })}
+          >
+            필수 문항
+          </Typography>
+          <Switch
+            size="small"
+            checked={(block as GeneralBlock).required}
+            onCheckedChange={(checked) => onUpdate(block.id, { required: checked } as Partial<GeneralBlock>)}
+          />
+        </FlexBox>
+      )}
+
+      {block.type === "maxdiff" && (
+        <FlexBox alignItems="center" gap="8px">
+          <Typography
+            variant="label2"
+            weight="bold"
+            sx={() => ({
+              color: "rgba(55,56,60,0.61)",
+            })}
+          >
+            필수 문항
+          </Typography>
+          <Switch
+            size="small"
+            checked={true}
+            disabled
+          />
+        </FlexBox>
+      )}
+
+      {/* 구분선 */}
+      <Box
+        sx={(theme) => ({
+          width: "1px",
+          height: "20px",
+          backgroundColor: theme.semantic.line.solid.normal,
+        })}
+      />
+
+      {/* 액션 버튼 */}
+      <FlexBox alignItems="center" gap="16px">
+        <IconButton
+          size={20}
+          onClick={(e) => { e.stopPropagation(); onDuplicate(block.id); }}
+          sx={(theme) => ({
+            color: theme.semantic.label.alternative,
+            "&:hover": { color: theme.semantic.label.normal },
+          })}
+        >
+          <IconCopy />
+        </IconButton>
+        <IconButton
+          size={20}
+          onClick={(e) => { e.stopPropagation(); onRemove(block.id); }}
+          sx={(theme) => ({
+            color: theme.semantic.label.alternative,
+            "&:hover": { color: theme.semantic.status.negative },
+          })}
+        >
+          <IconTrash />
+        </IconButton>
+        <Menu value="" onValueChange={() => {}}>
+          <MenuTrigger>
+            <IconButton
+              size={20}
+              onClick={(e) => e.stopPropagation()}
+              sx={(theme) => ({
+                color: theme.semantic.label.alternative,
+                "&:hover": { color: theme.semantic.label.normal },
+              })}
+            >
+              <IconMoreVertical />
+            </IconButton>
+          </MenuTrigger>
+          <MenuContent disablePortal sx={{ borderRadius: "16px", minWidth: "unset" }}>
+            <MenuList>
+              <MenuItem value="delete" onClick={() => onRemove(block.id)}>
+                삭제
+              </MenuItem>
+            </MenuList>
+          </MenuContent>
+        </Menu>
+      </FlexBox>
+    </Box>
   );
 }
