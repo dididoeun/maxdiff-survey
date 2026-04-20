@@ -118,7 +118,7 @@ interface SurveyFormProps {
 }
 
 export interface SurveyFormRef {
-  submit: (status: "published" | "draft") => Promise<void>;
+  submit: (status: "published" | "draft", overrideTitle?: string) => Promise<void>;
   setTitle: (title: string) => void;
 }
 
@@ -471,8 +471,10 @@ const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyFor
 
   // ── 제출 ──────────────────────────────────────────────────────────────────
 
-  const submitSurvey = async (status: "published" | "draft") => {
-    if (!title.trim()) return alert("설문 제목을 입력해주세요.");
+  const submitSurvey = async (status: "published" | "draft", overrideTitle?: string) => {
+    const effectiveTitle = overrideTitle ?? title;
+    if (!effectiveTitle.trim()) return alert("설문 제목을 입력해주세요.");
+    if (overrideTitle !== undefined) setTitle(overrideTitle);
     const maxdiffBlock = blocks.find((b): b is MaxDiffBlock => b.type === "maxdiff");
     const items = maxdiffBlock?.items.map((i) => ({ name: i.name, image: i.image })) ?? [];
     const setSize = maxdiffBlock?.setSize ?? 4;
@@ -489,7 +491,7 @@ const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyFor
       });
     setSavingType(status);
     try {
-      const payload = { title, items, setSize, jobRoles: [], status, questions };
+      const payload = { title: effectiveTitle, items, setSize, jobRoles: [], status, questions };
       if (mode === "edit" && surveyId) {
         const res = await fetch(`/api/surveys/${surveyId}`, {
           method: "PUT",
@@ -1095,17 +1097,28 @@ function MaxDiffContent({
               )}
             </div>
             {/* 항목 이름 */}
-            <Typography
-              variant="body1"
-              sx={() => ({
+            <input
+              value={item.name}
+              onChange={(e) =>
+                onUpdate(block.id, {
+                  items: block.items.map((i) =>
+                    i.id === item.id ? { ...i, name: e.target.value } : i
+                  ),
+                } as Partial<MaxDiffBlock>)
+              }
+              onClick={(e) => e.stopPropagation()}
+              placeholder={`옵션 ${idx + 1}`}
+              style={{
                 flex: 1,
+                border: "none",
+                outline: "none",
                 fontSize: "15px",
-                color: "rgba(55,56,60,0.61)",
+                color: item.name ? "#171719" : "rgba(55,56,60,0.61)",
+                background: "transparent",
+                fontFamily: "inherit",
                 lineHeight: "1.625",
-              })}
-            >
-              {item.name || `옵션 ${idx + 1}`}
-            </Typography>
+              }}
+            />
             <IconButton
               size={16}
               onClick={(e) => { e.stopPropagation(); onRemoveItem(block.id, item.id); }}

@@ -257,8 +257,7 @@ export default function EditSurveyPage() {
                   {copied ? "복사됨!" : "공유"}
                 </Button>
                 <Button variant="outlined" color="assistive" size="small" onClick={() => {
-                  formRef.current?.setTitle(surveyTitle);
-                  formRef.current?.submit("draft");
+                  formRef.current?.submit("draft", surveyTitle);
                 }}>
                   임시저장
                 </Button>
@@ -271,8 +270,7 @@ export default function EditSurveyPage() {
                 })}
               />
               <Button variant="solid" color="primary" size="small" onClick={() => {
-                formRef.current?.setTitle(surveyTitle);
-                formRef.current?.submit("published");
+                formRef.current?.submit("published", surveyTitle);
               }}>
                 발행하기
               </Button>
