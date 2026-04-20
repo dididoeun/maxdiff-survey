@@ -500,7 +500,7 @@ const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyFor
         });
         const data = await res.json();
         if (!res.ok) { alert(data.error || "설문 수정에 실패했습니다."); setSavingType(null); return; }
-        status === "draft" ? router.push("/dashboards") : setCreatedId(surveyId);
+        if (status === "published") setCreatedId(surveyId);
       } else {
         const res = await fetch("/api/surveys", {
           method: "POST",
@@ -508,7 +508,10 @@ const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyFor
           body: JSON.stringify(payload),
         });
         const data = await res.json();
-        if (data.id) { status === "draft" ? router.push("/dashboards") : setCreatedId(data.id); }
+        if (data.id) {
+          if (status === "draft") router.replace(`/admin/${data.id}`);
+          else setCreatedId(data.id);
+        }
       }
     } catch {
       alert("설문 저장에 실패했습니다.");
@@ -1037,6 +1040,8 @@ function MaxDiffContent({
   onRemoveItem: (blockId: string, itemId: string) => void;
   onImageUpload: (blockId: string, itemId: string, file: File) => void;
 }) {
+  const [previewItem, setPreviewItem] = useState<ItemInput | null>(null);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       {/* 항목 목록 */}
@@ -1079,7 +1084,20 @@ function MaxDiffContent({
               }}
             >
               {item.image ? (
-                <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setPreviewItem(item); }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    padding: 0,
+                    border: "none",
+                    background: "transparent",
+                    cursor: "zoom-in",
+                  }}
+                >
+                  <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                </button>
               ) : (
                 <label style={{ cursor: "pointer", color: "#9CA3AF", display: "flex" }} onClick={(e) => e.stopPropagation()}>
                   <input
@@ -1237,6 +1255,70 @@ function MaxDiffContent({
           </Typography>
         </div>
       </div>
+
+      {previewItem && (
+        <div
+          onClick={() => setPreviewItem(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            zIndex: 1000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "360px",
+              borderRadius: "12px",
+              padding: "16px",
+              backgroundColor: "#fff",
+              border: "1px solid rgba(112,115,124,0.16)",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {previewItem.image && (
+              <img
+                src={previewItem.image}
+                alt={previewItem.name}
+                style={{
+                  width: "100%",
+                  height: "128px",
+                  objectFit: "cover",
+                  borderRadius: "8px",
+                  marginBottom: "12px",
+                  backgroundColor: "#F3F4F6",
+                }}
+              />
+            )}
+            <p
+              style={{
+                fontWeight: 500,
+                textAlign: "center",
+                marginBottom: "12px",
+                flex: 1,
+                color: "#171719",
+              }}
+            >
+              {previewItem.name}
+            </p>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <Button variant="outlined" color="assistive" size="small" sx={{ flex: 1 }}>
+                {block.bestLabel || "가장 시급"}
+              </Button>
+              <Button variant="outlined" color="assistive" size="small" sx={{ flex: 1 }}>
+                {block.worstLabel || "가장 덜 시급"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
