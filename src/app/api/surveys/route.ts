@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
 
     await initDb();
     const body = await req.json();
-    const { title, items, setSize, jobRoles, status, questions } = body;
+    const { title, description, items, setSize, jobRoles, status, questions, maxdiffTitle, bestLabel, worstLabel } = body;
 
     const surveyStatus = status === "draft" ? "draft" : "published";
 
@@ -34,8 +34,8 @@ export async function POST(req: NextRequest) {
     const db = getDb();
 
     await db.execute({
-      sql: "INSERT INTO surveys (id, title, items, setSize, jobRoles, userId, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      args: [id, title, JSON.stringify(items), setSize || 4, JSON.stringify(jobRoles || []), user.id, surveyStatus],
+      sql: "INSERT INTO surveys (id, title, description, items, setSize, jobRoles, userId, status, maxdiffTitle, bestLabel, worstLabel) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      args: [id, title, description || "", JSON.stringify(items), setSize || 4, JSON.stringify(jobRoles || []), user.id, surveyStatus, maxdiffTitle || "", bestLabel || "", worstLabel || ""],
     });
 
     // 일반 문항 저장

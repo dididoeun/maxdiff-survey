@@ -103,4 +103,28 @@ export async function initDb() {
   } catch {
     // Column already exists
   }
+
+  // Add MaxDiff block meta columns (title, best/worst labels)
+  try {
+    await db.execute("ALTER TABLE surveys ADD COLUMN maxdiffTitle TEXT NOT NULL DEFAULT ''");
+  } catch {
+    // Column already exists
+  }
+  try {
+    await db.execute("ALTER TABLE surveys ADD COLUMN bestLabel TEXT NOT NULL DEFAULT ''");
+  } catch {
+    // Column already exists
+  }
+  try {
+    await db.execute("ALTER TABLE surveys ADD COLUMN worstLabel TEXT NOT NULL DEFAULT ''");
+  } catch {
+    // Column already exists
+  }
+
+  // 설문 설명 컬럼
+  try {
+    await db.execute("ALTER TABLE surveys ADD COLUMN description TEXT NOT NULL DEFAULT ''");
+  } catch {
+    // Column already exists
+  }
 }

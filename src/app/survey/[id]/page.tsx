@@ -225,7 +225,7 @@ export default function SurveyPage() {
 
   if (error) {
     return (
-      <PageContent size="sm" className="py-12 text-center">
+      <PageContent size="sm" className="text-center" style={{ paddingTop: 60, paddingBottom: 60 }}>
         <Typography
           variant="body1"
           sx={(theme) => ({ color: theme.semantic.status.negative })}
@@ -238,7 +238,7 @@ export default function SurveyPage() {
 
   if (!survey || sets.length === 0) {
     return (
-      <PageContent size="sm" className="py-12 flex items-center justify-center gap-2">
+      <PageContent size="sm" className="flex items-center justify-center gap-2" style={{ paddingTop: 60, paddingBottom: 60 }}>
         <Loading variant="circular" size="24px" />
         <Typography
           variant="body2"
@@ -252,7 +252,7 @@ export default function SurveyPage() {
 
   if (completed) {
     return (
-      <PageContent size="sm" className="py-12 text-center">
+      <PageContent size="sm" className="text-center" style={{ paddingTop: 60, paddingBottom: 60 }}>
         <img src="/success.svg" alt="" className="mx-auto mb-4" />
         <Typography
           variant="title3"
@@ -274,9 +274,9 @@ export default function SurveyPage() {
   // 직군 선택 화면
   if (stage === "job" && survey.jobRoles.length > 0) {
     return (
-      <PageContent size="sm" className="py-12">
+      <PageContent size="sm" style={{ paddingTop: 60, paddingBottom: 60 }}>
         <Typography
-          variant="title3"
+          variant="title2"
           weight="bold"
           sx={(theme) => ({ color: theme.semantic.label.normal, display: "block" })}
         >
@@ -287,14 +287,14 @@ export default function SurveyPage() {
           sx={(theme) => ({
             color: theme.semantic.label.alternative,
             marginTop: "4px",
-            marginBottom: "24px",
+            marginBottom: "40px",
             display: "block",
           })}
         >
           설문을 시작하기 전에 직군을 선택해주세요.
         </Typography>
 
-        <div className="space-y-2 mb-6" role="radiogroup">
+        <div className="space-y-2" style={{ marginBottom: 40 }} role="radiogroup">
           {survey.jobRoles.map((role) => (
             <label
               key={role}
@@ -361,9 +361,9 @@ export default function SurveyPage() {
     };
 
     return (
-      <PageContent size="sm" className="py-12">
+      <PageContent size="sm" style={{ paddingTop: 60, paddingBottom: 60 }}>
         <Typography
-          variant="headline1"
+          variant="title2"
           weight="bold"
           sx={(theme) => ({ color: theme.semantic.label.normal, display: "block", marginBottom: "4px" })}
         >
@@ -381,7 +381,7 @@ export default function SurveyPage() {
         {sections.length > 1 && (
           <Typography
             variant="caption1"
-            sx={(theme) => ({ color: theme.semantic.label.alternative, marginBottom: "24px", display: "block" })}
+            sx={(theme) => ({ color: theme.semantic.label.alternative, marginBottom: "40px", display: "block" })}
           >
             {currentSectionIdx + 1} / {sections.length}
           </Typography>
@@ -389,7 +389,7 @@ export default function SurveyPage() {
         {!section.sectionTitle && sections.length <= 1 && (
           <Typography
             variant="body2"
-            sx={(theme) => ({ color: theme.semantic.label.alternative, marginBottom: "24px", display: "block" })}
+            sx={(theme) => ({ color: theme.semantic.label.alternative, marginBottom: "40px", display: "block" })}
           >
             사전 질문에 답해주세요.
           </Typography>
@@ -399,7 +399,7 @@ export default function SurveyPage() {
           {section.questions.map((q) => {
             const ans = generalAnswers.find((a) => a.questionId === q.id);
             return (
-              <div key={q.id} className="space-y-3">
+              <div key={q.id} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <Typography
                   variant="body2"
                   weight="medium"
@@ -480,7 +480,7 @@ export default function SurveyPage() {
           </Typography>
         )}
 
-        <div className="flex gap-2 mt-6">
+        <div className="flex gap-2" style={{ marginTop: 40 }}>
           {currentSectionIdx > 0 && (
             <Button
               variant="outlined"
@@ -512,10 +512,10 @@ export default function SurveyPage() {
   const progressValue = ((currentRound + 1) / sets.length) * 100;
 
   return (
-    <PageContent className="py-8">
-      <div className="mb-6">
+    <PageContent style={{ paddingTop: 60, paddingBottom: 60 }}>
+      <div style={{ marginBottom: 40 }}>
         <Typography
-          variant="headline1"
+          variant="title2"
           weight="bold"
           sx={(theme) => ({ color: theme.semantic.label.normal, marginBottom: "8px", display: "block" })}
         >
@@ -534,7 +534,7 @@ export default function SurveyPage() {
         </div>
       </div>
 
-      <div className="mb-6">
+      <div style={{ marginBottom: 40 }}>
         <p className="text-muted-foreground mb-5 text-sm">
           <span className="text-red-600 font-semibold">가장 시급한 것</span>{" "}
           1개와{" "}
@@ -590,18 +590,20 @@ export default function SurveyPage() {
         </div>
       </div>
 
-      <Button
-        onClick={submitRound}
-        disabled={!best || !worst || submitting}
-        fullWidth
-        size="large"
-      >
-        {submitting
-          ? "제출 중..."
-          : currentRound + 1 < sets.length
-          ? "다음 라운드"
-          : "설문 완료"}
-      </Button>
+      <div style={{ marginTop: 40 }}>
+        <Button
+          onClick={submitRound}
+          disabled={!best || !worst || submitting}
+          fullWidth
+          size="large"
+        >
+          {submitting
+            ? "제출 중..."
+            : currentRound + 1 < sets.length
+            ? "다음 라운드"
+            : "설문 완료"}
+        </Button>
+      </div>
     </PageContent>
   );
 }

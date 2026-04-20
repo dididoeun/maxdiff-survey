@@ -104,11 +104,15 @@ export interface Question {
 
 export interface SurveyFormData {
   title: string;
+  description?: string;
   items: { name: string; image?: string }[];
   setSize: number;
   jobRoles: string[];
   status?: string;
   questions?: Question[];
+  maxdiffTitle?: string;
+  bestLabel?: string;
+  worstLabel?: string;
 }
 
 interface SurveyFormProps {
@@ -177,11 +181,11 @@ function initBlocks(initialData?: SurveyFormData): Block[] {
     blocks.push({
       id: crypto.randomUUID(),
       type: "maxdiff",
-      title: "",
+      title: initialData.maxdiffTitle || "",
       items: initialData.items.map((i) => ({ id: crypto.randomUUID(), ...i })),
       setSize: initialData.setSize || 4,
-      bestLabel: "",
-      worstLabel: "",
+      bestLabel: initialData.bestLabel || "",
+      worstLabel: initialData.worstLabel || "",
       order: 0,
     });
   }
@@ -216,6 +220,7 @@ const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyFor
   });
 
   const [title, setTitle] = useState(initialData?.title || "");
+  const [description, setDescription] = useState(initialData?.description || "");
   const [blocks, setBlocks] = useState<Block[]>(initData.blocks);
   const [selectedId, setSelectedId] = useState<string | null>(initData.selectedId);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -531,6 +536,9 @@ const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyFor
     const maxdiffBlock = blocks.find((b): b is MaxDiffBlock => b.type === "maxdiff");
     const items = maxdiffBlock?.items.map((i) => ({ name: i.name, image: i.image })) ?? [];
     const setSize = maxdiffBlock?.setSize ?? 4;
+    const maxdiffTitle = maxdiffBlock?.title ?? "";
+    const bestLabel = maxdiffBlock?.bestLabel ?? "";
+    const worstLabel = maxdiffBlock?.worstLabel ?? "";
     if (status === "published" && items.length < 2) {
       return alert("발행하려면 MaxDiff 문항에 최소 2개 이상의 항목을 추가해주세요.");
     }
@@ -544,7 +552,7 @@ const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyFor
       });
     setSavingType(status);
     try {
-      const payload = { title: effectiveTitle, items, setSize, jobRoles: [], status, questions };
+      const payload = { title: effectiveTitle, description, items, setSize, jobRoles: [], status, questions, maxdiffTitle, bestLabel, worstLabel };
       if (mode === "edit" && surveyId) {
         const res = await fetch(`/api/surveys/${surveyId}`, {
           method: "PUT",
@@ -639,6 +647,25 @@ const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyFor
         }}
       >
         <div style={{ maxWidth: "780px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "24px" }}>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="설문에 대한 설명을 입력해 주세요."
+            rows={3}
+            style={{
+              width: "100%",
+              resize: "vertical",
+              border: "1px solid #E1E2E4",
+              borderRadius: "12px",
+              padding: "12px 14px",
+              fontSize: "15px",
+              fontFamily: "inherit",
+              lineHeight: "1.625",
+              color: "#171719",
+              outline: "none",
+              backgroundColor: "white",
+            }}
+          />
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext items={blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
               {sectionGroups.map((group, gi) => (

@@ -84,7 +84,7 @@ export async function PUT(
     }
 
     const body = await req.json();
-    const { title, items, setSize, jobRoles, status, questions } = body;
+    const { title, description, items, setSize, jobRoles, status, questions, maxdiffTitle, bestLabel, worstLabel } = body;
 
     const surveyStatus = status === "draft" ? "draft" : "published";
 
@@ -103,8 +103,8 @@ export async function PUT(
     }
 
     await db.execute({
-      sql: "UPDATE surveys SET title = ?, items = ?, setSize = ?, jobRoles = ?, status = ? WHERE id = ?",
-      args: [title, JSON.stringify(items), setSize || 4, JSON.stringify(jobRoles || []), surveyStatus, id],
+      sql: "UPDATE surveys SET title = ?, description = ?, items = ?, setSize = ?, jobRoles = ?, status = ?, maxdiffTitle = ?, bestLabel = ?, worstLabel = ? WHERE id = ?",
+      args: [title, description || "", JSON.stringify(items), setSize || 4, JSON.stringify(jobRoles || []), surveyStatus, maxdiffTitle || "", bestLabel || "", worstLabel || "", id],
     });
 
     // 기존 questions 삭제 후 새로 INSERT

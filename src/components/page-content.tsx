@@ -11,13 +11,15 @@ export function PageContent({
   children,
   size = "md",
   className,
+  style,
 }: {
   children: React.ReactNode;
   size?: "sm" | "md";
   className?: string;
+  style?: React.CSSProperties;
 }) {
   return (
-    <div className={className}>
+    <div className={className} style={style}>
       <Grid
         spacing={0}
         sx={{ paddingLeft: "16px", paddingRight: "16px" }}

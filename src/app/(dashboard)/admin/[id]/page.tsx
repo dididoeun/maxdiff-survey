@@ -69,11 +69,15 @@ export default function EditSurveyPage() {
         setSurveyTitle(data.title || "설문 제목 없음");
         setSurveyData({
           title: data.title,
+          description: data.description || "",
           items: data.items,
           setSize: data.setSize,
           jobRoles: data.jobRoles,
           status: data.status,
           questions: data.questions || [],
+          maxdiffTitle: data.maxdiffTitle || "",
+          bestLabel: data.bestLabel || "",
+          worstLabel: data.worstLabel || "",
         });
       })
       .catch(() => setError("설문을 불러올 수 없습니다."));
