@@ -556,7 +556,7 @@ export default function SurveyPage() {
                   <img
                     src={item.image}
                     alt={item.name}
-                    className="w-full h-32 object-cover rounded-lg mb-3 bg-muted"
+                    className="w-full h-32 object-contain rounded-lg mb-3 bg-muted"
                   />
                 )}
                 <p className="font-medium text-foreground text-center mb-3 flex-1">

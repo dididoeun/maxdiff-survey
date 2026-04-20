@@ -1274,9 +1274,9 @@ function MaxDiffContent({
             onClick={(e) => e.stopPropagation()}
             style={{
               width: "100%",
-              maxWidth: "360px",
-              borderRadius: "12px",
-              padding: "16px",
+              maxWidth: "640px",
+              borderRadius: "16px",
+              padding: "24px",
               backgroundColor: "#fff",
               border: "1px solid rgba(112,115,124,0.16)",
               display: "flex",
@@ -1289,30 +1289,32 @@ function MaxDiffContent({
                 alt={previewItem.name}
                 style={{
                   width: "100%",
-                  height: "128px",
-                  objectFit: "cover",
-                  borderRadius: "8px",
-                  marginBottom: "12px",
+                  height: "420px",
+                  objectFit: "contain",
+                  borderRadius: "12px",
+                  marginBottom: "20px",
                   backgroundColor: "#F3F4F6",
+                  border: "1px solid rgba(112,115,124,0.16)",
                 }}
               />
             )}
             <p
               style={{
+                fontSize: "18px",
                 fontWeight: 500,
                 textAlign: "center",
-                marginBottom: "12px",
+                marginBottom: "20px",
                 flex: 1,
                 color: "#171719",
               }}
             >
               {previewItem.name}
             </p>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <Button variant="outlined" color="assistive" size="small" sx={{ flex: 1 }}>
+            <div style={{ display: "flex", gap: "12px" }}>
+              <Button variant="outlined" color="assistive" size="medium" sx={{ flex: 1 }}>
                 {block.bestLabel || "가장 시급"}
               </Button>
-              <Button variant="outlined" color="assistive" size="small" sx={{ flex: 1 }}>
+              <Button variant="outlined" color="assistive" size="medium" sx={{ flex: 1 }}>
                 {block.worstLabel || "가장 덜 시급"}
               </Button>
             </div>
