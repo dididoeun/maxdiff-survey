@@ -344,6 +344,59 @@ const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyFor
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     setBlocks((prev) => {
+      const activeBlock = prev.find((b) => b.id === active.id);
+      if (!activeBlock) return prev;
+
+      // 섹션 드래그: 섹션 + 하위 블록 전체를 함께 이동
+      if (activeBlock.type === "section") {
+        const activeIdx = prev.findIndex((b) => b.id === active.id);
+        let activeEnd = prev.length;
+        for (let i = activeIdx + 1; i < prev.length; i++) {
+          if (prev[i].type === "section") { activeEnd = i; break; }
+        }
+        const activeGroup = prev.slice(activeIdx, activeEnd);
+        const without = [...prev.slice(0, activeIdx), ...prev.slice(activeEnd)];
+
+        // over가 속한 섹션(또는 상단 고아 영역)의 시작 index 찾기
+        const overIdx = prev.findIndex((b) => b.id === over.id);
+        if (overIdx === -1) return prev;
+        let targetSectionIdx = -1;
+        for (let i = overIdx; i >= 0; i--) {
+          if (prev[i].type === "section") { targetSectionIdx = i; break; }
+        }
+
+        // 섹션을 못 찾으면(상단 고아 영역) → 최상단으로 이동
+        if (targetSectionIdx === -1) {
+          return [...activeGroup, ...without].map((b, i) => ({ ...b, order: i }));
+        }
+        if (targetSectionIdx === activeIdx) return prev;
+
+        const targetSectionId = prev[targetSectionIdx].id;
+        const newTargetIdx = without.findIndex((b) => b.id === targetSectionId);
+        if (newTargetIdx === -1) return prev;
+
+        let insertIdx: number;
+        if (activeIdx < targetSectionIdx) {
+          // 아래로 이동: 타겟 섹션 그룹 뒤에 삽입
+          let targetEnd = without.length;
+          for (let i = newTargetIdx + 1; i < without.length; i++) {
+            if (without[i].type === "section") { targetEnd = i; break; }
+          }
+          insertIdx = targetEnd;
+        } else {
+          // 위로 이동: 타겟 섹션 앞에 삽입
+          insertIdx = newTargetIdx;
+        }
+
+        const next = [
+          ...without.slice(0, insertIdx),
+          ...activeGroup,
+          ...without.slice(insertIdx),
+        ];
+        return next.map((b, i) => ({ ...b, order: i }));
+      }
+
+      // 일반 블록 이동
       const oldIndex = prev.findIndex((b) => b.id === active.id);
       const newIndex = prev.findIndex((b) => b.id === over.id);
       return arrayMove(prev, oldIndex, newIndex).map((b, i) => ({ ...b, order: i }));
@@ -591,14 +644,21 @@ const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyFor
               {sectionGroups.map((group, gi) => (
                 <div key={gi} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
                   {/* 섹션 헤더 */}
-                  {(group.section || gi === 0) && (
-                    <SectionHeader
+                  {group.section ? (
+                    <SortableSectionHeader
                       section={group.section}
                       index={gi}
                       onRemove={removeSectionWithBlocks}
                       onDuplicate={duplicateSection}
                     />
-                  )}
+                  ) : gi === 0 ? (
+                    <SectionHeader
+                      section={null}
+                      index={gi}
+                      onRemove={removeSectionWithBlocks}
+                      onDuplicate={duplicateSection}
+                    />
+                  ) : null}
 
                   {/* 문항 카드들 */}
                   {group.blocks.map((block) => {
@@ -647,22 +707,59 @@ export default SurveyForm;
 
 // ── 섹션 헤더 ────────────────────────────────────────────────────────────────
 
+function SortableSectionHeader(props: {
+  section: SectionBlock;
+  index: number;
+  onRemove: (id: string) => void;
+  onDuplicate: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: props.section.id });
+  const style = {
+    transform: transform
+      ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+      : undefined,
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      <SectionHeader {...props} dragAttributes={attributes} dragListeners={listeners} />
+    </div>
+  );
+}
+
 function SectionHeader({
   section,
   index,
   onRemove,
   onDuplicate,
+  dragAttributes,
+  dragListeners,
 }: {
   section: SectionBlock | null;
   index: number;
   onRemove: (id: string) => void;
   onDuplicate: (id: string) => void;
+  dragAttributes?: ReturnType<typeof useSortable>["attributes"];
+  dragListeners?: ReturnType<typeof useSortable>["listeners"];
 }) {
   const sectionTitle = section?.title || `섹션 ${index + 1}`;
 
   return (
     <FlexBox alignItems="center" gap="8px" sx={{ padding: "6px 0" }}>
       <Box sx={(theme) => ({ flex: 1, height: "1px", backgroundColor: theme.semantic.line.normal.alternative })} />
+      {section && dragListeners && (
+        <IconHandleDesktop
+          {...dragAttributes}
+          {...dragListeners}
+          sx={(theme) => ({
+            fontSize: "16px",
+            color: theme.semantic.label.alternative,
+            cursor: "grab",
+          })}
+        />
+      )}
       {section ? (
         <Menu value="" onValueChange={() => {}}>
           <MenuTrigger>
