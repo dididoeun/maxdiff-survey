@@ -94,9 +94,9 @@ type Block = MaxDiffBlock | GeneralBlock | SectionBlock;
 
 export interface Question {
   id: string;
-  type: "multiple_choice" | "short_answer" | "long_answer" | "section";
+  type: "multiple_choice" | "short_answer" | "long_answer" | "section" | "maxdiff";
   title: string;
-  options: string[];
+  options: string[] | { name: string; image?: string }[];
   required: boolean;
   multipleAnswers?: boolean;
   order: number;
@@ -177,8 +177,48 @@ function initBlocks(initialData?: SurveyFormData): Block[] {
     blocks.push(createBlock("multiple_choice", 0));
     return blocks;
   }
-  if (initialData.items.length > 0) {
-    blocks.push({
+
+  const hasMaxdiffInQuestions = initialData.questions?.some((q) => q.type === "maxdiff");
+
+  if (initialData?.questions && initialData.questions.length > 0) {
+    initialData.questions.forEach((q) => {
+      if (q.type === "section") {
+        blocks.push({ id: q.id || crypto.randomUUID(), type: "section", title: q.title, order: blocks.length });
+      } else if (q.type === "maxdiff") {
+        const items = Array.isArray(q.options)
+          ? q.options.map((opt) => ({
+              id: crypto.randomUUID(),
+              name: typeof opt === "string" ? opt : opt.name,
+              image: typeof opt === "string" ? undefined : opt.image,
+            }))
+          : [];
+        blocks.push({
+          id: q.id || crypto.randomUUID(),
+          type: "maxdiff",
+          title: q.title || initialData.maxdiffTitle || "",
+          items,
+          setSize: initialData.setSize || 4,
+          bestLabel: initialData.bestLabel || "",
+          worstLabel: initialData.worstLabel || "",
+          order: blocks.length,
+        });
+      } else {
+        blocks.push({
+          id: q.id || crypto.randomUUID(),
+          type: q.type,
+          title: q.title,
+          options: (q.options as string[]) || [],
+          required: q.required ?? true,
+          multipleAnswers: q.multipleAnswers ?? false,
+          order: blocks.length,
+        });
+      }
+    });
+  }
+
+  // 하위 호환: questions에 maxdiff 없고 surveys.items가 있으면 맨 앞에 MaxDiff 블록 삽입
+  if (!hasMaxdiffInQuestions && initialData.items.length > 0) {
+    blocks.unshift({
       id: crypto.randomUUID(),
       type: "maxdiff",
       title: initialData.maxdiffTitle || "",
@@ -188,24 +228,13 @@ function initBlocks(initialData?: SurveyFormData): Block[] {
       worstLabel: initialData.worstLabel || "",
       order: 0,
     });
+    blocks.forEach((b, i) => { b.order = i; });
   }
-  if (initialData?.questions) {
-    initialData.questions.forEach((q, i) => {
-      if (q.type === "section") {
-        blocks.push({ id: q.id || crypto.randomUUID(), type: "section", title: q.title, order: blocks.length + i });
-      } else {
-        blocks.push({
-          id: q.id || crypto.randomUUID(),
-          type: q.type,
-          title: q.title,
-          options: q.options || [],
-          required: q.required ?? true,
-          multipleAnswers: q.multipleAnswers ?? false,
-          order: blocks.length + i,
-        });
-      }
-    });
+
+  if (blocks.length === 0) {
+    blocks.push(createBlock("multiple_choice", 0));
   }
+
   return blocks;
 }
 
@@ -542,14 +571,22 @@ const SurveyForm = forwardRef<SurveyFormRef, SurveyFormProps>(function SurveyFor
     if (status === "published" && items.length < 2) {
       return alert("발행하려면 MaxDiff 문항에 최소 2개 이상의 항목을 추가해주세요.");
     }
-    const questions: Question[] = blocks
-      .filter((b): b is GeneralBlock | SectionBlock => b.type !== "maxdiff")
-      .map((b, i) => {
-        if (b.type === "section") {
-          return { id: b.id, type: "section" as const, title: b.title, options: [], required: false, order: i };
-        }
-        return { ...b, order: i };
-      });
+    const questions: Question[] = blocks.map((b, i) => {
+      if (b.type === "section") {
+        return { id: b.id, type: "section" as const, title: b.title, options: [], required: false, order: i };
+      }
+      if (b.type === "maxdiff") {
+        return {
+          id: b.id,
+          type: "maxdiff" as const,
+          title: b.title,
+          options: b.items.map((it) => ({ name: it.name, image: it.image })),
+          required: true,
+          order: i,
+        };
+      }
+      return { ...b, order: i };
+    });
     setSavingType(status);
     try {
       const payload = { title: effectiveTitle, description, items, setSize, jobRoles: [], status, questions, maxdiffTitle, bestLabel, worstLabel };
